@@ -1,0 +1,35 @@
+# Build outputs
+build/
+install/
+log/
+
+
+# ROS/catkin/ament
+devel/
+build_isolated/
+devel_isolated/
+**/*.log
+**/*.dbg
+
+# IDE
+.marscode/
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.so
+
+# Other
+*.swp
+*.swo
+*.tmp
+*~
