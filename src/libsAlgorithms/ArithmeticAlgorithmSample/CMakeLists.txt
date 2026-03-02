@@ -12,7 +12,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-add_library(${PROJECT_NAME} src/ArithmeticAlgorithm.cpp)
+add_library(${PROJECT_NAME} SHARED src/ArithmeticAlgorithm.cpp)
 
 add_executable(${PROJECT_NAME}_Test test/main.cpp)
 target_link_libraries(${PROJECT_NAME}_Test PRIVATE ${PROJECT_NAME})
