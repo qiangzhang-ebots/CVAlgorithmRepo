@@ -6,6 +6,6 @@
 int main() {
   ArithmeticAlgorithm alg;
   int result = alg.Add(1, 2);
-  std::cout << "hello, world" << std::endl;
+  std::cout << "hello, world"<< result << std::endl;
   return 0;
 }

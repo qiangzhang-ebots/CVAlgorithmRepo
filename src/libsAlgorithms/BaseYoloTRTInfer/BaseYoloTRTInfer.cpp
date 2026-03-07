@@ -1,4 +1,7 @@
 #include "BaseYoloTRTInfer.h"
+#include <fstream>
+#include <cassert>
+#include <stdexcept>
 
 size_t getSizeByDim(const nvinfer1::Dims& dims) {
   size_t size = 1;
@@ -54,7 +57,12 @@ bool BaseYoloTRTInfer::LoadModel(const std::string& modelPath) {
 
   cudaStreamCreate(&stream_);
 
+#if NV_TENSORRT_MAJOR >= 10
   int num_bindings = engine_->getNbIOTensors();
+#else
+  int num_bindings = engine_->getNbBindings();
+#endif
+
   if (num_bindings != 2) {
     std::cerr << "Expected exactly 2 bindings (input and output), but got "
               << num_bindings << std::endl;
@@ -63,6 +71,7 @@ bool BaseYoloTRTInfer::LoadModel(const std::string& modelPath) {
   for (int i = 0; i < 2; i++) {
     Binding binding;
 
+#if NV_TENSORRT_MAJOR >= 10
     const char* tensorName = engine_->getIOTensorName(i);
     nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
     nvinfer1::DataType dtype = engine_->getTensorDataType(tensorName);
@@ -75,9 +84,26 @@ bool BaseYoloTRTInfer::LoadModel(const std::string& modelPath) {
     nvinfer1::TensorIOMode mode = engine_->getTensorIOMode(tensorName);
 
     bool IsInput = (mode == nvinfer1::TensorIOMode::kINPUT);
+#else
+    const char* tensorName = engine_->getBindingName(i);
+    nvinfer1::Dims dims = engine_->getBindingDimensions(i);
+    nvinfer1::DataType dtype = engine_->getBindingDataType(i);
+
+    binding.name = tensorName;
+    binding.dims = dims;
+    binding.dtype = dtype;
+    binding.size = getSizeByDim(dims) * getElementSize(dtype);
+
+    bool IsInput = engine_->bindingIsInput(i);
+#endif
+
     if (IsInput) {
       input_binding_ = binding;
+#if NV_TENSORRT_MAJOR >= 10
       context_->setInputShape(tensorName, dims);  // Set input dimensions
+#else
+      context_->setBindingDimensions(i, dims);
+#endif
     } else {
       output_binding_ = binding;
     }
@@ -143,6 +169,7 @@ bool BaseYoloTRTInfer::Infer() {
 
   bool ret = false;
 
+#if NV_TENSORRT_MAJOR >= 10
   ret = context_->setTensorAddress(input_binding_.name.c_str(),
                                    device_buffers_[0]);
   if (!ret) {
@@ -159,6 +186,11 @@ bool BaseYoloTRTInfer::Infer() {
   }
 
   ret = context_->enqueueV3(stream_);
+#else
+  // void* bindings[] = {device_buffers_[0], device_buffers_[1]};
+  ret = context_->enqueueV2(device_buffers_, stream_, nullptr);
+#endif
+
   if (!ret) {
     std::cerr << "Failed to enqueue inference for context." << std::endl;
     return false;
@@ -247,22 +279,33 @@ bool BaseYoloTRTInfer::Letterbox(const cv::Mat& image, cv::Mat& output,
     tmp = image.clone();
   }
 
-  float dw = inp_w - padw;
-  float dh = inp_h - padh;
+  float dw = (inp_w - padw) / 2.f;
+  float dh = (inp_h - padh) / 2.f;
 
-  dw /= 2;
-  dh /= 2;
-
-  int top = int(std::round(dh - 0.1));
-  int bottom = int(std::round(dh + 0.1));
-  int left = int(std::round(dw - 0.1));
-  int right = int(std::round(dw + 0.1));
+  int top = int(std::round(dh - 0.1f));
+  int bottom = int(std::round(dh + 0.1f));
+  int left = int(std::round(dw - 0.1f));
+  int right = int(std::round(dw + 0.1f));
 
   cv::copyMakeBorder(tmp, tmp, top, bottom, left, right, cv::BORDER_CONSTANT,
                      cv::Scalar(114, 114, 114));
-  cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
-  cv::dnn::blobFromImage(tmp, output, 1.0 / 255.f, cv::Size(),
-                         cv::Scalar(0, 0, 0), false, false, CV_32F);
+
+  // Convert to RGB and normalize to NCHW manually since dnn::blobFromImage is unavailable
+  cv::Mat rgb;
+  cv::cvtColor(tmp, rgb, cv::COLOR_BGR2RGB);
+  
+  rgb.convertTo(rgb, CV_32FC3, 1.0 / 255.0);
+
+  // HWC to NCHW
+  std::vector<cv::Mat> channels(3);
+  cv::split(rgb, channels);
+
+  int sizes[] = {1, 3, size.height, size.width};
+  output.create(4, sizes, CV_32F);
+  int channel_size = size.width * size.height;
+  for (int i = 0; i < 3; ++i) {
+    memcpy(output.ptr<float>(0, i), channels[i].ptr<float>(), channel_size * sizeof(float));
+  }
 
   params_.resize_ratio = r;
   params_.dw = dw;
@@ -275,12 +318,6 @@ bool BaseYoloTRTInfer::Letterbox(const cv::Mat& image, cv::Mat& output,
 void BaseYoloTRTInfer::Postprocess() {
   auto num_channels = output_binding_.dims.d[1];
   auto num_anchors = output_binding_.dims.d[2];
-  auto dw = params_.dw;
-  auto dh = params_.dh;
-  auto width = params_.width;
-  auto height = params_.height;
-  auto width_ratio = params_.resize_ratio;
-  auto height_ratio = params_.resize_ratio;
 
   cv::Mat output = cv::Mat(num_channels, num_anchors, CV_32F,
                            static_cast<float*>(host_buffer_));
@@ -289,7 +326,6 @@ void BaseYoloTRTInfer::Postprocess() {
     float* data = output.ptr<float>(i);
     PostprocessOneObject(data);
   }
-  
 }
 
 cv::Point2f BaseYoloTRTInfer::ScaleCoords(const cv::Point2f& point) {
