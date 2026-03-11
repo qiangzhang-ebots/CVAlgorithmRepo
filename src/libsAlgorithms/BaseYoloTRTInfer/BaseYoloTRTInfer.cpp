@@ -1,4 +1,5 @@
 #include "BaseYoloTRTInfer.h"
+#include <fstream>
 
 size_t getSizeByDim(const nvinfer1::Dims& dims) {
   size_t size = 1;
