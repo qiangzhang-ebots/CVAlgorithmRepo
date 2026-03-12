@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>CVAlgorithm</name>
+  <version>0.0.1</version>
+  <description>for CVAlgorithm</description>
+  <license>BSD</license>
+
+  <maintainer email="qiangzhang@ebots.com">qiangzhang</maintainer>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>spdlog</depend>
+  <depend>onnxruntime</depend>
+  <depend>Open3D</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
