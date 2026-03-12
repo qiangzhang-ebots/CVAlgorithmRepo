@@ -2,7 +2,8 @@
 build/
 install/
 log/
-
+**/bin/
+**/lib/
 
 # ROS/catkin/ament
 devel/
