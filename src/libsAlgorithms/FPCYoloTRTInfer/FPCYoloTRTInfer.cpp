@@ -77,3 +77,28 @@ void FPCYoloTRTInfer::PostprocessOneObject(const float* row_ptr) {
     fpc_zif_objs_.push_back(obj);
   }
 }
+
+std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() const {
+  
+  std::vector<YoloKeypointObjectDescriptor> valid_objs;
+
+  for (int i = 0; i < 4; i++)
+  {
+    YoloKeypointObjectDescriptor best_obj; 
+    for (const auto& obj : fpc_zif_objs_) {
+      if (obj.box_confidence > 0.5 && obj.label == i) {
+        if (obj.box_confidence > best_obj.box_confidence) 
+        {
+          best_obj = obj;
+        }
+      }
+    }
+    valid_objs.push_back(best_obj);
+  }
+  return valid_objs;
+}
+
+void FPCYoloTRTInfer::Postprocess() {
+  fpc_zif_objs_.clear();
+  BaseYoloTRTInfer::Postprocess();
+}
