@@ -4,15 +4,15 @@
 #include "FPCYoloTRTInfer/FPCYoloTRTInfer.h"
 
 int main() {
-  // std::string engine_path =
-  //     "/root/perception/workspace/TRTProject/data/best.engine";
-  // std::string val_dir =
-  //     "/root/perception/workspace/TRTProject/data/20260301_2026-02-25_15_11_40_043.png";
-
   std::string engine_path =
-      "/home/ebots/Desktop/zhq/FPCDetection/runs/pose/train_240/weights/best.engine";
+      "/root/perception/workspace/model_data/best.engine";
   std::string val_dir =
-      "/home/ebots/Desktop/zhq/FPCDetection/datasets/images/val/20260301_2026-02-25_15_11_40_043.png";
+      "/root/perception/workspace/TRTProject/data/20260301_2026-02-25_15_11_40_043.png";
+
+  // std::string engine_path =
+  //     "/home/ebots/Desktop/zhq/FPCDetection/runs/pose/train_240/weights/best.engine";
+  // std::string val_dir =
+  //     "/home/ebots/Desktop/zhq/FPCDetection/datasets/images/val/20260301_2026-02-25_15_11_40_043.png";
 
   bool ret = false;
   FPCYoloTRTInfer infer;

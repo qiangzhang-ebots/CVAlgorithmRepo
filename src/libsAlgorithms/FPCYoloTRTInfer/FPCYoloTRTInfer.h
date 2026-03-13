@@ -10,10 +10,9 @@ class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
   FPCYoloTRTInfer();
   ~FPCYoloTRTInfer();
 
+  virtual void Postprocess() override;
   void PostprocessOneObject(const float* output) override;
-  std::vector<YoloKeypointObjectDescriptor> GetObjects() const {
-    return fpc_zif_objs_;
-  }
+  std::vector<YoloKeypointObjectDescriptor> GetObjects() const;
 
  protected:
   std::vector<YoloKeypointObjectDescriptor> fpc_zif_objs_;

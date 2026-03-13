@@ -5,9 +5,12 @@ file(GLOB HEADERS "*.h")
 
 # Find TensorRT
 # set(TENSORRT_ROOT "/home/ebots/Desktop/zhq/TensorRT-10.8.0.43.Linux.x86_64-gnu.cuda-12.8/TensorRT-10.8.0.43/targets/x86_64-linux-gnu") # Update this path to your TensorRT installation
-set(TENSORRT_ROOT "/root/perception/workspace/TRTProject/TensorRT-10.8.0.43.Linux.x86_64-gnu.cuda-12.8/TensorRT-10.8.0.43/targets/x86_64-linux-gnu") # Update this path to your TensorRT installation
-set(TensorRT_INCLUDE_DIRS "${TENSORRT_ROOT}/include")
-set(TensorRT_LIBRARY_DIRS "${TENSORRT_ROOT}/lib")
+# set(TENSORRT_ROOT "/root/perception/workspace/TRTProject/TensorRT-10.8.0.43.Linux.x86_64-gnu.cuda-12.8/TensorRT-10.8.0.43/targets/x86_64-linux-gnu") # Update this path to your TensorRT installation
+# set(TENSORRT_ROOT "/root/perception/workspace/TRTProject/TensorRT-10.9.0.34.Linux.x86_64-gnu.cuda-12.8/TensorRT-10.9.0.34/targets/x86_64-linux-gnu")
+# set(TensorRT_INCLUDE_DIRS "${TENSORRT_ROOT}/include")
+# set(TensorRT_LIBRARY_DIRS "${TENSORRT_ROOT}/lib")
+set(TensorRT_INCLUDE_DIRS "/usr/include")
+set(TensorRT_LIBRARY_DIRS "/usr/lib/x86_64-linux-gnu")
 set(TensorRT_LIBRARIES "nvinfer;nvonnxparser;nvparsers;nvrtc;nvuffparser") # Update with the actual libraries you need
 include_directories(/usr/local/cuda-12.8/include)
 include_directories(/usr/include/opencv4)
@@ -25,10 +28,6 @@ target_link_libraries(${SUBPROJECT} PUBLIC
     "${TensorRT_LIBRARY_DIRS}/libnvinfer.so"
     "${TensorRT_LIBRARY_DIRS}/libnvonnxparser.so"
 )
-message("=========================================== CVRepo")
-message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
-message("===========================================")
-
 
 target_include_directories(${SUBPROJECT} PUBLIC
     ${TensorRT_INCLUDE_DIRS}
