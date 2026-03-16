@@ -7,7 +7,7 @@ int main() {
   std::string engine_path =
       "/root/perception/workspace/model_data/best.engine";
   std::string val_dir =
-      "/root/perception/workspace/TRTProject/data/20260301_2026-02-25_15_11_40_043.png";
+      "/root/perception/workspace/image_detector/scripts/a.png";
 
   // std::string engine_path =
   //     "/home/ebots/Desktop/zhq/FPCDetection/runs/pose/train_240/weights/best.engine";
