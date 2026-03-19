@@ -47,6 +47,8 @@ int main() {
 
   auto objects = infer.GetObjects();
 
+  std::pair<double, double> overlap = infer.CalOverLap();
+  std::cout << "Overlap (FPC/ZIF): " << overlap.first << ", " << overlap.second << std::endl;
   for (auto& obj : objects) {
     // cv::rectangle(image, obj.bounding_box, cv::Scalar(0, 255, 0), 2);
     size_t kp_size = obj.keypoints.size();

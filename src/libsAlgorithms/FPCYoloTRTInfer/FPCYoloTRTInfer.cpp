@@ -78,7 +78,7 @@ void FPCYoloTRTInfer::PostprocessOneObject(const float* row_ptr) {
   }
 }
 
-std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() const {
+std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
   
   std::vector<YoloKeypointObjectDescriptor> valid_objs;
 
@@ -95,10 +95,45 @@ std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() const {
     }
     valid_objs.push_back(best_obj);
   }
+  m_valid_objs_ = valid_objs;
   return valid_objs;
 }
 
 void FPCYoloTRTInfer::Postprocess() {
   fpc_zif_objs_.clear();
   BaseYoloTRTInfer::Postprocess();
+}
+
+double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypointObjectDescriptor& ZIF) {
+  if (FPC.keypoints.size() < 3 || ZIF.keypoints.size() < 3) {
+    return 0.0;  // Not enough keypoints to form a polygon
+  }
+
+    // std::vector<cv::Point2f> fpc_poly, zif_poly;
+    // for (const auto& kp : FPC.keypoints) fpc_poly.push_back(kp);
+    // for (const auto& kp : ZIF.keypoints) zif_poly.push_back(kp);
+
+  std::vector<cv::Point2f> intersection_poly;
+  double intersection_area = cv::intersectConvexConvex(FPC.keypoints, ZIF.keypoints, intersection_poly);
+  double fpc_area = cv::contourArea(FPC.keypoints);
+
+  if (fpc_area == 0) return 0.0;
+  return intersection_area / fpc_area;
+}
+
+std::pair<double, double> FPCYoloTRTInfer::CalOverLap() {
+  if (fpc_zif_objs_.empty() || m_valid_objs_.empty()) {
+    return std::make_pair(0.0, 0.0);
+  }
+  if(m_valid_objs_.empty()) GetObjects();
+
+  auto fpc1 = m_valid_objs_[0];
+  auto zif1 = m_valid_objs_[1];
+  auto fpc2 = m_valid_objs_[2];
+  auto zif2 = m_valid_objs_[3];
+
+  double overlap1 = CalculateOverlap(fpc1, zif1);
+  double overlap2 = CalculateOverlap(fpc2, zif2);
+
+  return std::make_pair(overlap1, overlap2);
 }
