@@ -22,7 +22,8 @@ class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
     * Please note that: if the overlap is 0, it means that there is no overlap or failed to detect the object
     *
   */
-  std::pair<double, double> CalOverLap(); 
+  std::pair<double, double> CalOverLap();
+  std::pair<double, double> CalFpcArea();
  protected:
   std::vector<YoloKeypointObjectDescriptor> fpc_zif_objs_, m_valid_objs_;
 };

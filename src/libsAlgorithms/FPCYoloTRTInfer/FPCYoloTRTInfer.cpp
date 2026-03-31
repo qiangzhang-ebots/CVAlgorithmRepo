@@ -121,11 +121,21 @@ double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypo
   return intersection_area / fpc_area;
 }
 
+double CalculateArea(const YoloKeypointObjectDescriptor& FPC) {
+  if (FPC.keypoints.size() < 3) {
+    return 0.0;
+  }
+
+  return cv::contourArea(FPC.keypoints);
+}
+
 std::pair<double, double> FPCYoloTRTInfer::CalOverLap() {
-  if (fpc_zif_objs_.empty() || m_valid_objs_.empty()) {
+  if (fpc_zif_objs_.empty()) {
     return std::make_pair(0.0, 0.0);
   }
-  if(m_valid_objs_.empty()) GetObjects();
+  if (m_valid_objs_.empty()) {
+    GetObjects();
+  }
 
   auto fpc1 = m_valid_objs_[0];
   auto zif1 = m_valid_objs_[1];
@@ -136,4 +146,18 @@ std::pair<double, double> FPCYoloTRTInfer::CalOverLap() {
   double overlap2 = CalculateOverlap(fpc2, zif2);
 
   return std::make_pair(overlap1, overlap2);
+}
+
+std::pair<double, double> FPCYoloTRTInfer::CalFpcArea() {
+  if (fpc_zif_objs_.empty()) {
+    return std::make_pair(0.0, 0.0);
+  }
+  if (m_valid_objs_.empty()) {
+    GetObjects();
+  }
+
+  auto fpc1 = m_valid_objs_[0];
+  auto fpc2 = m_valid_objs_[2];
+
+  return std::make_pair(CalculateArea(fpc1), CalculateArea(fpc2));
 }
