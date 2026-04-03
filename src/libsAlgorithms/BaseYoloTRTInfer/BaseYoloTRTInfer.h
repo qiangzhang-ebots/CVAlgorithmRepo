@@ -68,14 +68,15 @@ class BASEYOLOINFER_EXPORT BaseYoloTRTInfer {
   std::shared_ptr<nvinfer1::IRuntime> runtime_;
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;
-  cudaStream_t stream_;
+  cudaStream_t stream_ = nullptr;
   Logger logger_;
 
   Binding input_binding_;
   Binding output_binding_;
 
-  void* device_buffers_[2];  // Pointers to input and output device buffers
-  void* host_buffer_;        // Pointer to output host buffer
+  void* device_buffers_[2] = {nullptr, nullptr};  // Pointers to input and output device buffers
+  void* host_input_buffer_ = nullptr;
+  void* host_buffer_ = nullptr;        // Pointer to output host buffer
   Params params_;
 };
 

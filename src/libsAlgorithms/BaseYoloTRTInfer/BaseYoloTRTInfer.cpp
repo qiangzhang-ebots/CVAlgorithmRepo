@@ -28,7 +28,26 @@ size_t getElementSize(nvinfer1::DataType dtype) {
 
 BaseYoloTRTInfer::BaseYoloTRTInfer() {}
 
-BaseYoloTRTInfer::~BaseYoloTRTInfer() {}
+BaseYoloTRTInfer::~BaseYoloTRTInfer() {
+  if (stream_ != nullptr) {
+    cudaStreamSynchronize(stream_);
+  }
+  if (device_buffers_[0] != nullptr) {
+    cudaFree(device_buffers_[0]);
+  }
+  if (device_buffers_[1] != nullptr) {
+    cudaFree(device_buffers_[1]);
+  }
+  if (host_input_buffer_ != nullptr) {
+    cudaFreeHost(host_input_buffer_);
+  }
+  if (host_buffer_ != nullptr) {
+    cudaFreeHost(host_buffer_);
+  }
+  if (stream_ != nullptr) {
+    cudaStreamDestroy(stream_);
+  }
+}
 
 bool BaseYoloTRTInfer::LoadModel(const std::string& modelPath) {
   std::ifstream file(modelPath, std::ios::binary);
@@ -109,6 +128,12 @@ void BaseYoloTRTInfer::MakePipe(bool is_warmup) {
   if (err != cudaSuccess) {
     std::cerr << "Failed to allocate device memory for output tensor "
               << output_binding_.name << std::endl;
+    return;
+  }
+  err = cudaHostAlloc(&host_input_buffer_, input_binding_.size, 0);
+  if (err != cudaSuccess) {
+    std::cerr << "Failed to allocate host memory for input tensor "
+              << input_binding_.name << std::endl;
     return;
   }
   err = cudaHostAlloc(&host_buffer_, output_binding_.size, 0);
@@ -206,19 +231,32 @@ bool BaseYoloTRTInfer::Predict(const cv::Mat& input_image) {
 }
 
 bool BaseYoloTRTInfer::Preprocess(const cv::Mat& input_image) {
-  cv::Mat nchw;
+  cv::Mat letterboxed;
 
   auto width = input_binding_.dims.d[3];
   auto height = input_binding_.dims.d[2];
   cv::Size size(width, height);
 
-  Letterbox(input_image, nchw,
+  Letterbox(input_image, letterboxed,
             size);  // Implement letterbox resizing to fit model input size
-  // context_->setInputShape(tensorName, dims);
+
+  float* input_ptr = static_cast<float*>(host_input_buffer_);
+  const int image_area = width * height;
+  const float scale = 1.0f / 255.0f;
+  for (int row = 0; row < height; ++row) {
+    const cv::Vec3b* row_ptr = letterboxed.ptr<cv::Vec3b>(row);
+    for (int col = 0; col < width; ++col) {
+      const cv::Vec3b& pixel = row_ptr[col];
+      const int index = row * width + col;
+      input_ptr[index] = pixel[2] * scale;
+      input_ptr[image_area + index] = pixel[1] * scale;
+      input_ptr[2 * image_area + index] = pixel[0] * scale;
+    }
+  }
+
   cudaError_t err;
-  err = cudaMemcpyAsync(device_buffers_[0], nchw.ptr<float>(),
-                        nchw.total() * nchw.elemSize(), cudaMemcpyHostToDevice,
-                        stream_);
+  err = cudaMemcpyAsync(device_buffers_[0], host_input_buffer_,
+                        input_binding_.size, cudaMemcpyHostToDevice, stream_);
   if (err != cudaSuccess) {
     std::cerr << "Failed to copy data to device for input tensor "
               << input_binding_.name << std::endl;
@@ -259,11 +297,8 @@ bool BaseYoloTRTInfer::Letterbox(const cv::Mat& image, cv::Mat& output,
   int left = int(std::round(dw - 0.1));
   int right = int(std::round(dw + 0.1));
 
-  cv::copyMakeBorder(tmp, tmp, top, bottom, left, right, cv::BORDER_CONSTANT,
-                     cv::Scalar(114, 114, 114));
-  cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
-  cv::dnn::blobFromImage(tmp, output, 1.0 / 255.f, cv::Size(),
-                         cv::Scalar(0, 0, 0), false, false, CV_32F);
+    cv::copyMakeBorder(tmp, output, top, bottom, left, right, cv::BORDER_CONSTANT,
+        cv::Scalar(114, 114, 114));
 
   params_.resize_ratio = r;
   params_.dw = dw;
