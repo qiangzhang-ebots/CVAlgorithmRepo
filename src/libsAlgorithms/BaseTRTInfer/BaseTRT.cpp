@@ -32,11 +32,25 @@ size_t GetElementSize(nvinfer1::DataType dtype) {
 	}
 }
 
+bool SetCudaDevice(int gpu_id, const char* stage) {
+	cudaError_t err = cudaSetDevice(gpu_id);
+	if (err != cudaSuccess) {
+		std::cerr << "Failed to set CUDA device to gpu_id=" << gpu_id << " at "
+						<< stage << ": " << cudaGetErrorString(err) << std::endl;
+		return false;
+	}
+	return true;
+}
+
 }  // namespace
 
 BaseTRT::BaseTRT() {}
 
 BaseTRT::~BaseTRT() {
+	if (!SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT")) {
+		return;
+	}
+
 	if (stream_ != nullptr) {
 		cudaStreamSynchronize(stream_);
 	}
@@ -57,7 +71,12 @@ BaseTRT::~BaseTRT() {
 	}
 }
 
-bool BaseTRT::LoadModel(const std::string& modelPath) {
+bool BaseTRT::LoadModel(const std::string& modelPath) 
+{
+	if (!SetCudaDevice(gpu_id_, "BaseTRT::LoadModel")) {
+		return false;
+	}
+
 	std::ifstream file(modelPath, std::ios::binary);
 	assert(file.good());
 	file.seekg(0, std::ios::end);
@@ -122,7 +141,17 @@ bool BaseTRT::LoadModel(const std::string& modelPath) {
 	return true;
 }
 
+bool BaseTRT::SetGPUId(int gpu_id)
+{
+	gpu_id_ = gpu_id;
+  return SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT");
+}
+
 void BaseTRT::MakePipe(bool is_warmup) {
+	if (!SetCudaDevice(gpu_id_, "BaseTRT::MakePipe")) {
+		return;
+	}
+
 	cudaError_t err;
 
 	err = cudaMallocAsync(&device_buffers_[0], input_binding_.size, stream_);
@@ -171,6 +200,10 @@ void BaseTRT::MakePipe(bool is_warmup) {
 }
 
 bool BaseTRT::Infer() {
+	if (!SetCudaDevice(gpu_id_, "BaseTRT::Infer")) {
+		return false;
+	}
+
 	cudaError_t err;
 
 	bool ret = context_->setTensorAddress(input_binding_.name.c_str(),

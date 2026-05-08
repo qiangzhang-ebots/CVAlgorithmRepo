@@ -34,6 +34,10 @@ class BASETRTINFER_EXPORT BaseTRT {
 
 	bool LoadModel(const std::string& modelPath);
 
+	/*
+		设置运行的gpu_id，需要类初始化时设置。默认为0
+	*/
+	bool SetGPUId(int gpu_id); 
  protected:
 	void MakePipe(bool is_warmup = false);
 	bool Infer();
@@ -47,6 +51,7 @@ class BASETRTINFER_EXPORT BaseTRT {
 
 	Binding input_binding_;
 	Binding output_binding_;
+	int gpu_id_ = 0;
 
 	void* device_buffers_[2] = {nullptr, nullptr};
 	void* host_input_buffer_ = nullptr;

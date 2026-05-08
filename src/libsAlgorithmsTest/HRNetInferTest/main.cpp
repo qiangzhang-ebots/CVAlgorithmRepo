@@ -11,6 +11,7 @@ int main() {
 
   bool ret = false;
   HRNetInfer infer;
+  infer.SetGPUId(1);
   ret = infer.LoadModel(engine_path);
   if (!ret) {
     std::cerr << "Failed to load model from " << engine_path << std::endl;
@@ -34,7 +35,7 @@ int main() {
   // 统计推理时间
   auto start = std::chrono::high_resolution_clock::now();
   KeypointObjectDescriptor obj;
-  int T = 10;
+  int T = 100;
   for (int i = 0; i < T; i++) {
     obj = infer.Predict(input_image, roi);
   }
