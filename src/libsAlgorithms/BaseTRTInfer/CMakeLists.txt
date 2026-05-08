@@ -1,5 +1,5 @@
 
-set(SUBPROJECT BaseYoloTRTInfer)
+set(SUBPROJECT BaseTRTInfer)
 file(GLOB SOURCES "*.cpp" "*.c" "*.hpp")
 file(GLOB HEADERS "*.h")
 
@@ -23,7 +23,6 @@ add_library(${SUBPROJECT} SHARED ${SOURCES} ${HEADERS})
 
 
 target_link_libraries(${SUBPROJECT} PUBLIC
-    BaseTRTInfer
     ${CUDA_LIBRARIES}
     ${OpenCV_LIBS}
     "${TensorRT_LIBRARY_DIRS}/libnvinfer.so"

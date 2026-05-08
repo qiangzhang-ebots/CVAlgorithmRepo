@@ -15,7 +15,7 @@ FPCYoloTRTInfer::FPCYoloTRTInfer() {
 FPCYoloTRTInfer::~FPCYoloTRTInfer() {}
 
 void FPCYoloTRTInfer::PostprocessOneObject(const float* row_ptr) {
-  YoloKeypointObjectDescriptor obj;
+  KeypointObjectDescriptor obj;
   auto bboxes_ptr = row_ptr;
   auto scores_ptr = row_ptr + 4;   // Assuming first 4 are bbox,
   auto kps_ptr = row_ptr + 4 + 1;  // Assuming 1 class score, then
@@ -78,13 +78,13 @@ void FPCYoloTRTInfer::PostprocessOneObject(const float* row_ptr) {
   }
 }
 
-std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
+std::vector<KeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
   
-  std::vector<YoloKeypointObjectDescriptor> valid_objs;
+  std::vector<KeypointObjectDescriptor> valid_objs;
 
   for (int i = 0; i < 4; i++)
   {
-    YoloKeypointObjectDescriptor best_obj; 
+    KeypointObjectDescriptor best_obj; 
     for (const auto& obj : fpc_zif_objs_) {
       if (obj.box_confidence > 0.5 && obj.label == i) {
         if (obj.box_confidence > best_obj.box_confidence) 
@@ -104,7 +104,7 @@ void FPCYoloTRTInfer::Postprocess() {
   BaseYoloTRTInfer::Postprocess();
 }
 
-double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypointObjectDescriptor& ZIF) {
+double CalculateOverlap(const KeypointObjectDescriptor& FPC, const KeypointObjectDescriptor& ZIF) {
   if (FPC.keypoints.size() < 3 || ZIF.keypoints.size() < 3) {
     return 0.0;  // Not enough keypoints to form a polygon
   }
@@ -121,7 +121,7 @@ double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypo
   return intersection_area / fpc_area;
 }
 
-double CalculateArea(const YoloKeypointObjectDescriptor& FPC) {
+double CalculateArea(const KeypointObjectDescriptor& FPC) {
   if (FPC.keypoints.size() < 3) {
     return 0.0;
   }

@@ -3,7 +3,7 @@
 #define FPCYOLOINFER_H
 
 #include "BaseYoloTRTInfer/BaseYoloTRTInfer.h"
-#include "BaseYoloTRTInfer/YoloObjectDefine.h"
+#include "BaseTRTInfer/KeypointObjectDefine.h"
 #include "FPCYoloTRTInferGlobal.h"
 class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
  public:
@@ -12,7 +12,7 @@ class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
 
   virtual void Postprocess() override;
   void PostprocessOneObject(const float* output) override;
-  std::vector<YoloKeypointObjectDescriptor> GetObjects();
+  std::vector<KeypointObjectDescriptor> GetObjects();
 
   /*
     * @brief calculate the overlap between FPC and ZIF
@@ -25,7 +25,7 @@ class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
   std::pair<double, double> CalOverLap();
   std::pair<double, double> CalFpcArea();
  protected:
-  std::vector<YoloKeypointObjectDescriptor> fpc_zif_objs_, m_valid_objs_;
+  std::vector<KeypointObjectDescriptor> fpc_zif_objs_, m_valid_objs_;
 };
 
 #endif

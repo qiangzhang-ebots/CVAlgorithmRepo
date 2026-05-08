@@ -13,8 +13,9 @@ add_subdirectory(libsAlgorithms)
 add_subdirectory(libsAlgorithmsTest)
 
 set(modules 
+  BaseTRTInfer
 	BaseYoloTRTInfer
-    FPCYoloTRTInfer
+  FPCYoloTRTInfer
 )
 
 # --- install ---
