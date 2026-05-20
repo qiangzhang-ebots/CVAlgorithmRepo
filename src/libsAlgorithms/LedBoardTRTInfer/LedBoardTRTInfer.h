@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BaseYoloTRTInfer/BaseYoloTRTInfer.h"
-#include "BaseYoloTRTInfer/YoloObjectDefine.h"
+#include "BaseTRTInfer/KeypointObjectDefine.h"
 #include <unordered_map>
 #include <string>
 
