@@ -14,8 +14,9 @@ add_subdirectory(libsAlgorithmsTest)
 
 set(modules 
     BaseTRTInfer
-	BaseYoloTRTInfer
+    BaseYoloTRTInfer
     FPCYoloTRTInfer
+    HRNetInfer
     LedBoardTRTInfer
 )
 
@@ -37,4 +38,3 @@ ament_export_include_directories(include)
 ament_export_libraries(${modules})
 
 ament_package()
-
