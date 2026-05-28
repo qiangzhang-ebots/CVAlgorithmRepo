@@ -1,4 +1,5 @@
 
+// /data/Code/tianma_project_ws/ebots_ros2_perception/workspace/ebots_perception_core/vendor/CVAlgorithmRepo/src/libsAlgorithms/FPCYoloTRTInfer/FPCYoloTRTInfer.cpp
 #include "FPCYoloTRTInfer.h"
 
 template <typename T>
@@ -8,83 +9,25 @@ T clamp(T value, T min, T max) {
   return value;
 }
 
-FPCYoloTRTInfer::FPCYoloTRTInfer() {
+FPCYoloTRTInfer::FPCYoloTRTInfer() : YoloTRTInfer(YoloTaskType::POSE) {
   // Constructor implementation
 }
 
 FPCYoloTRTInfer::~FPCYoloTRTInfer() {}
 
-void FPCYoloTRTInfer::PostprocessOneObject(const float* row_ptr) {
-  YoloKeypointObjectDescriptor obj;
-  auto bboxes_ptr = row_ptr;
-  auto scores_ptr = row_ptr + 4;   // Assuming first 4 are bbox,
-  auto kps_ptr = row_ptr + 4 + 1;  // Assuming 1 class score, then
-
-  float score = *scores_ptr;
-  if (score > 0.5)  // Confidence threshold
-  {
-    float x1 = *bboxes_ptr++;
-    float y1 = *bboxes_ptr++;
-    float x2 = *bboxes_ptr++;
-    float y2 = *bboxes_ptr++;
-
-    cv::Point2f p1 = ScaleCoords(cv::Point2f(x1, y1));
-    cv::Point2f p2 = ScaleCoords(cv::Point2f(x2, y2));
-    x1 = p1.x;
-    y1 = p1.y;
-    x2 = p2.x;
-    y2 = p2.y;
-
-    float label = *kps_ptr++;
-    obj.label = static_cast<int>(label);
-    obj.box_confidence = score;
-
-    // float x0 = clamp<float>((x-0.5f*w)*width_ratio, 0, width);
-    // float y0 = clamp<float>((y-0.5f*h)*height_ratio, 0, height);
-    // float x1 = clamp<float>((x+0.5f*w)*width_ratio, 0, width);
-    // float y1 = clamp<float>((y+0.5f*h)*height_ratio, 0, height);
-    cv::Rect bbox;
-    bbox.x = x1;
-    bbox.y = y1;
-    bbox.width = x2 - x1;
-    bbox.height = y2 - y1;
-    obj.bounding_box = bbox;
-
-    for (int k = 0; k < 4; k++)  // Assuming 17 keypoints
-    {
-      // float kpx = (*(kps_ptr + 3*k) - dw)*width_ratio;
-      // float kpy = (*(kps_ptr + 3*k + 1) - dh)*height_ratio;
-      // float kps = *(kps_ptr + 3*k + 2); // Keypoint confidence
-      float kpx = *(kps_ptr + 3 * k);
-      float kpy = *(kps_ptr + 3 * k + 1);
-      float kps = *(kps_ptr + 3 * k + 2);
-
-      cv::Point2f kp = ScaleCoords(cv::Point2f(kpx, kpy));
-      kpx = kp.x;
-      kpy = kp.y;
-
-      kpx = clamp<float>(kpx, 0, params_.width);
-      kpy = clamp<float>(kpy, 0, params_.height);
-
-      if (kps > 0.5)  // Keypoint confidence threshold
-      {
-        obj.keypoints.emplace_back(kpx, kpy);
-      }
-
-      obj.confidences.push_back(kps);
-    }
-
-    fpc_zif_objs_.push_back(obj);
-  }
+std::vector<KeypointObjectDescriptor> FPCYoloTRTInfer::Predict(const cv::Mat& inputImage) {
+    fpc_zif_objs_.clear();
+    YoloTRTInfer::Predict(inputImage);  // 触发预处理、推理、后处理
+    return GetObjects();  // 返回处理后的 FPC 结果
 }
 
-std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
+std::vector<KeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
   
-  std::vector<YoloKeypointObjectDescriptor> valid_objs;
+  std::vector<KeypointObjectDescriptor> valid_objs;
 
   for (int i = 0; i < 4; i++)
   {
-    YoloKeypointObjectDescriptor best_obj; 
+    KeypointObjectDescriptor best_obj; 
     for (const auto& obj : fpc_zif_objs_) {
       if (obj.box_confidence > 0.5 && obj.label == i) {
         if (obj.box_confidence > best_obj.box_confidence) 
@@ -101,17 +44,77 @@ std::vector<YoloKeypointObjectDescriptor> FPCYoloTRTInfer::GetObjects() {
 
 void FPCYoloTRTInfer::Postprocess() {
   fpc_zif_objs_.clear();
-  BaseYoloTRTInfer::Postprocess();
+  
+  // 获取输出维度
+  auto num_channels = output_binding_.dims.d[1];
+  auto num_anchors = output_binding_.dims.d[2];
+
+  // 创建输出矩阵
+  cv::Mat output = cv::Mat(num_channels, num_anchors, CV_32F,
+                           static_cast<float*>(host_buffer_));
+
+  // 遍历所有锚点，进行后处理
+  for (int i = 0; i < num_anchors; ++i) {
+    float* row_ptr = output.ptr<float>(i);
+    
+    KeypointObjectDescriptor obj;
+    auto bboxes_ptr = row_ptr;
+    auto scores_ptr = row_ptr + 4;   // Assuming first 4 are bbox,
+    auto kps_ptr = row_ptr + 4 + 1;  // Assuming 1 class score, then
+
+    float score = *scores_ptr;
+    if (score > 0.5)  // Confidence threshold
+    {
+      float x1 = *bboxes_ptr++;
+      float y1 = *bboxes_ptr++;
+      float x2 = *bboxes_ptr++;
+      float y2 = *bboxes_ptr++;
+
+      cv::Point2f p1 = ScaleCoords(cv::Point2f(x1, y1));
+      cv::Point2f p2 = ScaleCoords(cv::Point2f(x2, y2));
+      x1 = p1.x;
+      y1 = p1.y;
+      x2 = p2.x;
+      y2 = p2.y;
+
+      float label = *kps_ptr++;
+      obj.label = static_cast<int>(label);
+      obj.box_confidence = score;
+
+      cv::Rect bbox;
+      bbox.x = x1;
+      bbox.y = y1;
+      bbox.width = x2 - x1;
+      bbox.height = y2 - y1;
+      obj.bounding_box = bbox;
+
+      for (int k = 0; k < 4; k++)  // Assuming 4 keypoints
+      {
+        float kpx = *(kps_ptr + 3 * k);
+        float kpy = *(kps_ptr + 3 * k + 1);
+        float kps = *(kps_ptr + 3 * k + 2);
+
+        cv::Point2f kp = ScaleCoords(cv::Point2f(kpx, kpy));
+        kpx = kp.x;
+        kpy = kp.y;
+
+        if (kps > 0.5)  // Keypoint confidence threshold
+        {
+          obj.keypoints.emplace_back(kpx, kpy);
+        }
+
+        obj.confidences.push_back(kps);
+      }
+
+      fpc_zif_objs_.push_back(obj);
+    }
+  }
 }
 
-double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypointObjectDescriptor& ZIF) {
+double CalculateOverlap(const KeypointObjectDescriptor& FPC, const KeypointObjectDescriptor& ZIF) {
   if (FPC.keypoints.size() < 3 || ZIF.keypoints.size() < 3) {
     return 0.0;  // Not enough keypoints to form a polygon
   }
-
-    // std::vector<cv::Point2f> fpc_poly, zif_poly;
-    // for (const auto& kp : FPC.keypoints) fpc_poly.push_back(kp);
-    // for (const auto& kp : ZIF.keypoints) zif_poly.push_back(kp);
 
   std::vector<cv::Point2f> intersection_poly;
   double intersection_area = cv::intersectConvexConvex(FPC.keypoints, ZIF.keypoints, intersection_poly);
@@ -121,7 +124,7 @@ double CalculateOverlap(const YoloKeypointObjectDescriptor& FPC, const YoloKeypo
   return intersection_area / fpc_area;
 }
 
-double CalculateArea(const YoloKeypointObjectDescriptor& FPC) {
+double CalculateArea(const KeypointObjectDescriptor& FPC) {
   if (FPC.keypoints.size() < 3) {
     return 0.0;
   }

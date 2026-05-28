@@ -31,8 +31,9 @@ int main() {
   // 统计推理时间
   auto start = std::chrono::high_resolution_clock::now();
   int T = 10;
+  std::vector<KeypointObjectDescriptor> objects;
   for (int i = 0; i < T; i++) {
-    ret = infer.Predict(input_image);
+    objects = infer.Predict(input_image);
   }
 
   auto end = std::chrono::high_resolution_clock::now();
@@ -45,7 +46,7 @@ int main() {
     return -1;
   }
 
-  auto objects = infer.GetObjects();
+  //auto objects = infer.GetObjects();
 
   std::pair<double, double> overlap = infer.CalOverLap();
   std::cout << "Overlap (FPC/ZIF): " << overlap.first << ", " << overlap.second << std::endl;

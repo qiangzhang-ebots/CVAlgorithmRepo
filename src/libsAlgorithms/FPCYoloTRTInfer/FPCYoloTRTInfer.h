@@ -1,18 +1,18 @@
-
 #ifndef FPCYOLOINFER_H
 #define FPCYOLOINFER_H
 
-#include "BaseYoloTRTInfer/BaseYoloTRTInfer.h"
-#include "BaseYoloTRTInfer/YoloObjectDefine.h"
+#include "YoloTRTInfer/YoloTRTInfer.h"
+#include "BaseTRTInfer/KeypointObjectDefine.h"
 #include "FPCYoloTRTInferGlobal.h"
-class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
+
+class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public YoloTRTInfer {
  public:
   FPCYoloTRTInfer();
   ~FPCYoloTRTInfer();
 
-  virtual void Postprocess() override;
-  void PostprocessOneObject(const float* output) override;
-  std::vector<YoloKeypointObjectDescriptor> GetObjects();
+  // 添加 Predict 方法覆盖
+  std::vector<KeypointObjectDescriptor> Predict(const cv::Mat& inputImage);
+  std::vector<KeypointObjectDescriptor> GetObjects();
 
   /*
     * @brief calculate the overlap between FPC and ZIF
@@ -24,8 +24,10 @@ class FPCYOLOTRTINFER_EXPORT FPCYoloTRTInfer : public BaseYoloTRTInfer {
   */
   std::pair<double, double> CalOverLap();
   std::pair<double, double> CalFpcArea();
+
  protected:
-  std::vector<YoloKeypointObjectDescriptor> fpc_zif_objs_, m_valid_objs_;
+  virtual void Postprocess() override;
+  std::vector<KeypointObjectDescriptor> fpc_zif_objs_, m_valid_objs_;
 };
 
 #endif

@@ -1,5 +1,5 @@
 
-set(SUBPROJECT BaseYoloTRTInfer)
+set(SUBPROJECT BaseTRTInfer)
 file(GLOB SOURCES "*.cpp" "*.c" "*.hpp")
 file(GLOB HEADERS "*.h")
 
@@ -15,7 +15,7 @@ set(TensorRT_LIBRARIES "nvinfer;nvonnxparser;nvparsers;nvrtc;nvuffparser") # Upd
 include_directories(/usr/local/cuda-12.8/include)
 include_directories(/usr/include/opencv4)
 find_package(OpenCV REQUIRED)
-find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 # Add TensorRT library directory
 # link_directories(${TensorRT_LIBRARY_DIRS})
 
@@ -23,7 +23,7 @@ add_library(${SUBPROJECT} SHARED ${SOURCES} ${HEADERS})
 
 
 target_link_libraries(${SUBPROJECT} PUBLIC
-    ${CUDA_LIBRARIES}
+    CUDA::cudart
     ${OpenCV_LIBS}
     "${TensorRT_LIBRARY_DIRS}/libnvinfer.so"
     "${TensorRT_LIBRARY_DIRS}/libnvonnxparser.so"
@@ -31,6 +31,5 @@ target_link_libraries(${SUBPROJECT} PUBLIC
 
 target_include_directories(${SUBPROJECT} PUBLIC
     ${TensorRT_INCLUDE_DIRS}
-    ${CUDA_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
 )

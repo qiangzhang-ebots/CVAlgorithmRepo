@@ -1,5 +1,5 @@
 
-set(SUBPROJECT FPCYoloTRTInfer)
+set(SUBPROJECT HRNetInfer)
 file(GLOB SOURCES "*.cpp" "*.c" "*.hpp")
 file(GLOB HEADERS "*.h")
 
@@ -8,5 +8,5 @@ include_directories(/usr/include/opencv4)
 add_library(${SUBPROJECT} SHARED ${SOURCES} ${HEADERS})
 
 target_link_libraries(${SUBPROJECT} PUBLIC
-    YoloTRTInfer
+    BaseTRTInfer
 )
