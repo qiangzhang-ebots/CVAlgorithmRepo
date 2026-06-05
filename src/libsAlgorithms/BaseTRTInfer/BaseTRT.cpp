@@ -107,17 +107,24 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 							<< num_bindings << std::endl;
 		return false;
 	}
+<<<<<<< HEAD
 	for (int i = 0; i < 2; i++) {// 0: input, 1: output 这个地方分开写更合适，因为input和output的维度是不同的
+=======
+	for (int i = 0; i < 2; i++) {
+>>>>>>> 906732a55827364bbdfac4815084379630beebb2
 		Binding binding;
 
 		const char* tensorName = engine_->getIOTensorName(i);
 		nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
 		nvinfer1::DataType dtype = engine_->getTensorDataType(tensorName);
 
+<<<<<<< HEAD
 		std::cout << "tensorName " << tensorName << " dims: [ ";
 		for (int j = 0; j < dims.nbDims; ++j) { std::cout << dims.d[j] << " "; }
 		std::cout << "]" << std::endl;
 
+=======
+>>>>>>> 906732a55827364bbdfac4815084379630beebb2
 		binding.name = tensorName;
 		binding.dims = dims;
 		binding.dtype = dtype;
@@ -148,7 +155,11 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 bool BaseTRT::SetGPUId(int gpu_id)
 {
 	gpu_id_ = gpu_id;
+<<<<<<< HEAD
   	return SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT");
+=======
+  return SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT");
+>>>>>>> 906732a55827364bbdfac4815084379630beebb2
 }
 
 void BaseTRT::MakePipe(bool is_warmup) {
