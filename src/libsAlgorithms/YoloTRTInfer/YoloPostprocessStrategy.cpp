@@ -1,6 +1,45 @@
-// /data/Code/tianma_project_ws/ebots_ros2_perception/workspace/ebots_perception_core/vendor/CVAlgorithmRepo/src/libsAlgorithms/YoloTRTInfer/YoloPostprocessStrategy.cpp
 #include "YoloPostprocessStrategy.h"
 
+// 通用 NMS 函数
+static void nms(std::vector<YoloObject>& objects, float iou_threshold = 0.45f) {
+    if (objects.empty()) return;
+    
+    // Lambda: 计算 IoU
+    auto iou = [](const cv::Rect2f& a, const cv::Rect2f& b) {
+        cv::Rect2f inter = a & b;
+        if (inter.width <= 0 || inter.height <= 0) return 0.0f;
+        float inter_area = inter.width * inter.height;
+        float area_a = a.width * a.height;
+        float area_b = b.width * b.height;
+        return inter_area / (area_a + area_b - inter_area);
+    };
+    
+    // 按置信度降序排序
+    std::sort(objects.begin(), objects.end(), [](const YoloObject& a, const YoloObject& b) {
+        return a.confidence > b.confidence;
+    });
+    
+    std::vector<bool> keep(objects.size(), true);
+    
+    for (size_t i = 0; i < objects.size(); ++i) {
+        if (!keep[i]) continue;
+        for (size_t j = i + 1; j < objects.size(); ++j) {
+            if (!keep[j]) continue;
+            // 使用 Lambda 计算 IoU
+            float iou_val = iou(objects[i].bbox, objects[j].bbox);
+            if (iou_val > iou_threshold) {
+                keep[j] = false;
+            }
+        }
+    }
+    std::vector<YoloObject> result;
+    for (size_t i = 0; i < objects.size(); ++i) {
+        if (keep[i]) {
+            result.push_back(objects[i]);
+        }
+    }
+    objects = std::move(result);
+}
 
 // 目标检测后处理 - 返回 x1,y1,x2,y2
 void DetectPostprocess(
@@ -32,9 +71,12 @@ void DetectPostprocess(
         
         detected_objects.push_back(obj);
     }
+    // NMS
+    //nms(detected_objects);
 }
 
-auto get_bounding_box = [](const std::vector<cv::Point2f> &points) -> cv::Rect2f {
+// 计算最小外接矩形
+static cv::Rect2f get_bounding_box(const std::vector<cv::Point2f> &points) {
     if (points.empty()) {
         return cv::Rect2f();
     }
@@ -94,10 +136,13 @@ void OBBPostprocess(
         obj.points.emplace_back(x3, y3);  // 点3
         obj.points.emplace_back(x4, y4);  // 点4
 
-        obj.bbox = get_bounding_box(obj.points);
+        obj.bbox = get_bounding_box(obj.points);// 浮点rect
 
         detected_objects.push_back(obj);
     }
+
+    // NMS
+    //nms(detected_objects);
 }
 
 // 关键点检测后处理 - 返回N个关键点
@@ -150,6 +195,8 @@ void PosePostprocess(
 
         detected_objects.push_back(obj);
     }
+    // NMS
+    //nms(detected_objects);
 }
 
 // 分割后处理 - 返回轮廓点集，待验证
@@ -199,4 +246,6 @@ void SegmentPostprocess(
 
         detected_objects.push_back(obj);
     }
+    // NMS
+    //nms(detected_objects);
 }

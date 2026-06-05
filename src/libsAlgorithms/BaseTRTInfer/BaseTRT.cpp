@@ -114,8 +114,7 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 		nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
 		nvinfer1::DataType dtype = engine_->getTensorDataType(tensorName);
 
-		std::cout << "tensorName = " << tensorName << std::endl;
-		std::cout << "dims = " << dims.nbDims << " [ ";
+		std::cout << "tensorName " << tensorName << " dims: [ ";
 		for (int j = 0; j < dims.nbDims; ++j) { std::cout << dims.d[j] << " "; }
 		std::cout << "]" << std::endl;
 
@@ -149,7 +148,7 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 bool BaseTRT::SetGPUId(int gpu_id)
 {
 	gpu_id_ = gpu_id;
-  return SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT");
+  	return SetCudaDevice(gpu_id_, "BaseTRT::~BaseTRT");
 }
 
 void BaseTRT::MakePipe(bool is_warmup) {

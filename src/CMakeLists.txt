@@ -17,7 +17,6 @@ set(modules
     YoloTRTInfer
     FPCYoloTRTInfer
     HRNetInfer
-    #LedBoardTRTInfer
 )
 
 # --- install ---

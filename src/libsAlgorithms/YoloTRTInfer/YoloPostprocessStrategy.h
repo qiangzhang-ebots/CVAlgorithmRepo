@@ -1,4 +1,3 @@
-// /data/Code/tianma_project_ws/ebots_ros2_perception/workspace/ebots_perception_core/vendor/CVAlgorithmRepo/src/libsAlgorithms/YoloTRTInfer/YoloPostprocessStrategy.h
 #pragma once
 
 #include <vector>

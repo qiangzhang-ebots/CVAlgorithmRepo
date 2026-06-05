@@ -1,5 +1,3 @@
-
-// /data/Code/tianma_project_ws/ebots_ros2_perception/workspace/ebots_perception_core/vendor/CVAlgorithmRepo/src/libsAlgorithms/FPCYoloTRTInfer/FPCYoloTRTInfer.cpp
 #include "FPCYoloTRTInfer.h"
 
 template <typename T>
