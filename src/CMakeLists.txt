@@ -14,16 +14,9 @@ add_subdirectory(libsAlgorithmsTest)
 
 set(modules 
     BaseTRTInfer
-<<<<<<< HEAD
     YoloTRTInfer
     FPCYoloTRTInfer
     HRNetInfer
-=======
-    BaseYoloTRTInfer
-    FPCYoloTRTInfer
-    HRNetInfer
-    LedBoardTRTInfer
->>>>>>> 906732a55827364bbdfac4815084379630beebb2
 )
 
 # --- install ---
