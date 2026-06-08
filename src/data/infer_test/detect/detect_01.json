@@ -1,0 +1,64 @@
+{
+  "version": "5.11.2.dev27+g31338d998.d20260304",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "coil",
+      "points": [
+        [
+          895.444,
+          661.33
+        ],
+        [
+          1679.56,
+          1432.67
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "shape_type": "rectangle",
+      "flags": {},
+      "mask": null
+    },
+    {
+      "label": "slot_1st",
+      "points": [
+        [
+          897.828,
+          941.657
+        ],
+        [
+          942.172,
+          1134.34
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "shape_type": "rectangle",
+      "flags": {},
+      "mask": null
+    },
+    {
+      "label": "slot_2nd",
+      "points": [
+        [
+          1239.68,
+          1389.82
+        ],
+        [
+          1375.32,
+          1430.18
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "shape_type": "rectangle",
+      "flags": {},
+      "mask": null
+    }
+  ],
+  "imagePath": "detect_01.tiff",
+  "imageData": null,
+  "imageHeight": 2048,
+  "imageWidth": 2448
+}

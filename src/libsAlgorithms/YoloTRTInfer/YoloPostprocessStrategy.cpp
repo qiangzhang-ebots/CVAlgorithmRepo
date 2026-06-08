@@ -1,6 +1,6 @@
 #include "YoloPostprocessStrategy.h"
 
-// 通用 NMS 函数
+// 通用 NMS 函数。暂时没有调用
 static void nms(std::vector<YoloObject>& objects, float iou_threshold = 0.45f) {
     if (objects.empty()) return;
     
@@ -61,6 +61,8 @@ void DetectPostprocess(
         float x2 = data[2];
         float y2 = data[3];
         int label = static_cast<int>(round(data[5]));
+
+        std::cout << "label " << label << " conf " << conf <<  "points [" << x1 << "," << y1 << "] [" << x2 << "," << y2 << "]\n";
         
         YoloObject obj;
         obj.label = label;
@@ -75,22 +77,6 @@ void DetectPostprocess(
     //nms(detected_objects);
 }
 
-// 计算最小外接矩形
-static cv::Rect2f get_bounding_box(const std::vector<cv::Point2f> &points) {
-    if (points.empty()) {
-        return cv::Rect2f();
-    }
-    float min_x = points[0].x, max_x = points[0].x;
-    float min_y = points[0].y, max_y = points[0].y;
-    for (const auto& p : points) {
-        min_x = std::min(min_x, p.x);
-        max_x = std::max(max_x, p.x);
-        min_y = std::min(min_y, p.y);
-        max_y = std::max(max_y, p.y);
-    }
-    return cv::Rect2f(min_x, min_y, max_x - min_x, max_y - min_y);
-};
-
 // 旋转目标检测后处理 - 返回4个点
 void OBBPostprocess(
     const float* output_buffer,
@@ -99,10 +85,48 @@ void OBBPostprocess(
     std::vector<YoloObject>& detected_objects) {
 
     detected_objects.clear();
-    if (num_channels < 10) {    // 所需最小通道数 = 10
-        printf("[OBBPostprocess] Invalid num_channels=%d, expected at least 10\n", num_channels);
+    if (num_channels < 7) {    // 所需最小通道数 = 7
+        printf("[OBBPostprocess] Invalid num_channels=%d, expected at least 7\n", num_channels);
         return;
     }
+
+    // 计算旋转矩形四个角点
+       auto obb_points = [](float cx, float cy, float w, float h, float r) {
+        // 半宽、半高
+        float half_w = w * 0.5f;
+        float half_h = h * 0.5f;
+        // 三角函数
+        float cos_r = std::cos(r);
+        float sin_r = std::sin(r);
+        // 旋转矩形四个角点相对中心的偏移量
+        float dx1 = -half_w * cos_r - (-half_h) * sin_r;
+        float dy1 = -half_w * sin_r + (-half_h) * cos_r;
+        float dx2 = half_w * cos_r - (-half_h) * sin_r;
+        float dy2 = half_w * sin_r + (-half_h) * cos_r;
+        float dx3 = half_w * cos_r - half_h * sin_r;
+        float dy3 = half_w * sin_r + half_h * cos_r;
+        float dx4 = -half_w * cos_r - half_h * sin_r;
+        float dy4 = -half_w * sin_r + half_h * cos_r;
+        return std::make_tuple(
+            cx + dx1, cy + dy1, cx + dx2, cy + dy2, cx + dx3, cy + dy3, cx + dx4, cy + dy4
+        );
+    };
+
+    // 计算最小外接矩形
+    auto get_bounding_box = [](const std::vector<cv::Point2f> &points) -> cv::Rect2f {
+        if (points.empty()) {
+            return cv::Rect2f();
+        }
+        float min_x = points[0].x, max_x = points[0].x;
+        float min_y = points[0].y, max_y = points[0].y;
+        for (const auto& p : points) {
+            min_x = std::min(min_x, p.x);
+            max_x = std::max(max_x, p.x);
+            min_y = std::min(min_y, p.y);
+            max_y = std::max(max_y, p.y);
+        }
+        return cv::Rect2f(min_x, min_y, max_x - min_x, max_y - min_y);
+    };
 
     for (int i = 0; i < num_detections; ++i) {
         const float* data = output_buffer + i * num_channels;
@@ -112,21 +136,14 @@ void OBBPostprocess(
         float cy = data[1];
         float w = data[2];
         float h = data[3];
-        float r = data[4];
-        float obj_conf = data[5];
-        int label = static_cast<int>(round(data[6]));
+        float obj_conf = data[4];
+        int label = static_cast<int>(round(data[5])); 
+        float r = data[6];
 
         // 置信度过滤
         if (obj_conf < 0.5f) continue;
-
-        float x1 = data[7];
-        float y1 = data[8];
-        float x2 = data[9];
-        float y2 = data[10];
-        float x3 = data[11];
-        float y3 = data[12];
-        float x4 = data[13];
-        float y4 = data[14];
+        // obb输出只有以上7个通道。所以四个点需要从cx cy w h r计算
+        auto [x1, y1, x2, y2, x3, y3, x4, y4] = obb_points(cx, cy, w, h, r);
         
         YoloObject obj;
         obj.label = label;

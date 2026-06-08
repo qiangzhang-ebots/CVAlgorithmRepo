@@ -4,6 +4,7 @@ install/
 log/
 **/bin/
 **/lib/
+*/result/
 
 # ROS/catkin/ament
 devel/

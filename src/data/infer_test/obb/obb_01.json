@@ -1,0 +1,46 @@
+{
+  "version": "5.0.1",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "coil",
+      "points": [
+        [902.708, 1436.66],
+        [889.409, 674.777],
+        [1659.29, 661.339],
+        [1672.59, 1423.22]
+      ],
+      "group_id": null,
+      "shape_type": "polygon",
+      "flags": {}
+    },
+    {
+      "label": "slot_1st",
+      "points": [
+        [896, 1142],
+        [896, 939],
+        [934, 939],
+        [934, 1142]
+      ],
+      "group_id": null,
+      "shape_type": "polygon",
+      "flags": {}
+    },
+    {
+      "label": "slot_2nd",
+      "points": [
+        [1235.37, 1431.16],
+        [1234.65, 1390.16],
+        [1367.63, 1387.84],
+        [1368.35, 1428.84]
+      ],
+      "group_id": null,
+      "shape_type": "polygon",
+      "flags": {}
+    }
+  ],
+  "imagePath": "obb_01.tiff",
+  "imageData": null,
+  "imageHeight": 2048,
+  "imageWidth": 2448
+}

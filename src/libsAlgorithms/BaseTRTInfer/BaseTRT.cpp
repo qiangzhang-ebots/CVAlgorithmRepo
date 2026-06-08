@@ -107,9 +107,9 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 							<< num_bindings << std::endl;
 		return false;
 	}
-
 	for (int i = 0; i < 2; i++) {// 0: input, 1: output 这个地方分开写更合适，因为input和output的维度是不同的
 		Binding binding;
+
 		const char* tensorName = engine_->getIOTensorName(i);
 		nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
 		nvinfer1::DataType dtype = engine_->getTensorDataType(tensorName);
@@ -198,7 +198,7 @@ void BaseTRT::MakePipe(bool is_warmup) {
 			}
 			free(host_ptr);
 			Infer();
-			std::cout << "Warmup iteration " << i + 1 << " completed." << std::endl;
+			// std::cout << "Warmup iteration " << i + 1 << " completed." << std::endl;
 		}
 	}
 }
