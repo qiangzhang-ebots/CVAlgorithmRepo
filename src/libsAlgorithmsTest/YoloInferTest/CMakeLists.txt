@@ -9,4 +9,5 @@ target_link_libraries(${SUBPROJECT} PRIVATE
 
 target_include_directories(${SUBPROJECT} PRIVATE
     ${PROJECT_SOURCE_DIR}/libsAlgorithms/YoloTRTInfer
+    ${PROJECT_SOURCE_DIR}/libsAlgorithmsTest/YoloInferTest/utils
 )

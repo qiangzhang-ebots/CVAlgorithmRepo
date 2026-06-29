@@ -11,21 +11,6 @@
 #include "json.hpp"
 using json = nlohmann::json;
 
-std::map<std::string, int> label_map = {
-    // detect / obb
-    {"coil",      0},
-    {"slot_1st",  1},
-    {"slot_2nd",  2},
-    
-    // pose
-    {"1",         0},
-    {"2",         1},
-    {"3",         2},
-    {"4",         3},
-    {"5",         4},
-    {"6",         5}
-};
-
 struct Annotation {
     std::string label;
     std::vector<cv::Point2f> points;
@@ -79,6 +64,40 @@ float CalculatePointError(const std::vector<cv::Point2f>& pred, const std::vecto
     }
     
     return total_dist / count;
+}
+
+// 将float点转换为int点（用于cv::fillPoly/cv::drawContours）
+std::vector<cv::Point> ptsToInt(const std::vector<cv::Point2f>& pts) {
+    std::vector<cv::Point> result;
+    result.reserve(pts.size());
+    for (const auto& p : pts) {
+        result.emplace_back(cv::Point(cvRound(p.x), cvRound(p.y)));
+    }
+    return result;
+}
+
+// 计算分割掩码IoU
+float CalculateMaskIoU(const std::vector<cv::Point2f>& pred_pts, const std::vector<cv::Point2f>& gt_pts, int img_width, int img_height) {
+    if (pred_pts.size() < 3 || gt_pts.size() < 3) return 0.0f;
+
+    cv::Mat pred_mask = cv::Mat::zeros(img_height, img_width, CV_8UC1);
+    cv::Mat gt_mask = cv::Mat::zeros(img_height, img_width, CV_8UC1);
+
+    std::vector<std::vector<cv::Point>> pred_contour = {ptsToInt(pred_pts)};
+    std::vector<std::vector<cv::Point>> gt_contour = {ptsToInt(gt_pts)};
+
+    cv::fillPoly(pred_mask, pred_contour, cv::Scalar(255));
+    cv::fillPoly(gt_mask, gt_contour, cv::Scalar(255));
+
+    cv::Mat intersection, union_mat;
+    cv::bitwise_and(pred_mask, gt_mask, intersection);
+    cv::bitwise_or(pred_mask, gt_mask, union_mat);
+
+    float inter_area = static_cast<float>(cv::countNonZero(intersection));
+    float union_area = static_cast<float>(cv::countNonZero(union_mat));
+
+    if (union_area < 1e-6f) return 0.0f;
+    return inter_area / union_area;
 }
 
 // 关键点颜色配置 
@@ -135,12 +154,59 @@ void DrawResults(cv::Mat& image, const std::vector<YoloObject>& objects, const s
                 cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(255, 255, 255), 2);
 }
 
-// 测试单个任务
+// 保存推理结果为JSON文件
+void SaveResultsToJson(const std::vector<YoloObject>& objects, const std::string& img_path,
+                       int img_width, int img_height, const std::string& output_path) {
+    json root;
+    root["imagePath"] = std::filesystem::path(img_path).filename().string();
+    root["imageWidth"] = img_width;
+    root["imageHeight"] = img_height;
+
+    json objs = json::array();
+    for (const auto& obj : objects) {
+        json j;
+        j["label"] = obj.label;
+        j["confidence"] = obj.confidence;
+
+        // bbox
+        j["bbox"] = {{"x", obj.bbox.x}, {"y", obj.bbox.y},
+                     {"width", obj.bbox.width}, {"height", obj.bbox.height}};
+
+        // points
+        json pts = json::array();
+        for (const auto& p : obj.points) {
+            pts.push_back({p.x, p.y});
+        }
+        j["points"] = pts;
+
+        // point_confidences
+        if (!obj.point_confidences.empty()) {
+            json pcs = json::array();
+            for (auto c : obj.point_confidences) pcs.push_back(c);
+            j["point_confidences"] = pcs;
+        }
+
+        objs.push_back(j);
+    }
+    root["objects"] = objs;
+
+    std::ofstream ofs(output_path);
+    ofs << root.dump(2);
+}
+
+// 测试单个任务（is_segment=true 时使用掩码 IoU + 轮廓可视化）
 bool TestTask(YoloTaskType task_type, const std::string& task_name,
               const std::string& model_path, const std::vector<std::string>& image_paths,
-              const std::vector<std::string>& json_paths, const std::string& output_dir) {
-    std::cout << "\n========== Testing " << task_name << " ==========" << std::endl;
-    
+              const std::vector<std::string>& json_paths, const std::string& output_dir,
+              const std::map<std::string, int>& label_map,
+              bool is_segment = false) {
+
+    // 构建标签ID→名称的反向映射
+    std::map<int, std::string> id_to_label;
+    for (const auto& [name, id] : label_map) {
+        id_to_label[id] = name;
+    }
+
     YoloTRTInfer detector(task_type);
     
     if (!detector.LoadModel(model_path)) {
@@ -152,7 +218,7 @@ bool TestTask(YoloTaskType task_type, const std::string& task_name,
     int total_images = 0;
     int total_detections = 0;
     int total_gt = 0;
-    float total_point_error = 0.0f;
+    float total_error = 0.0f;
     int matched_count = 0;
     
     for (size_t i = 0; i < image_paths.size(); i++) {
@@ -177,6 +243,10 @@ bool TestTask(YoloTaskType task_type, const std::string& task_name,
         auto objects = detector.Predict(image);
         total_detections += objects.size();
         
+        // 保存推理结果JSON
+        std::string json_out_path = output_dir + "/" + task_name + "_result_" + std::to_string(i) + ".json";
+        SaveResultsToJson(objects, img_path, image.cols, image.rows, json_out_path);
+        
         std::cout << "\n检测图像: " << std::filesystem::path(img_path).filename() << std::endl;
         std::cout << "  真值(GT)数:     " << annotations.size() << std::endl;
         std::cout << "  检测到目标数:    " << objects.size() << std::endl;
@@ -188,55 +258,109 @@ bool TestTask(YoloTaskType task_type, const std::string& task_name,
         for (const auto& pred_obj : objects) {
             int pred_cls = pred_obj.label;
             int best_gt_idx = -1;
+            float best_err = 0.0f;
 
-            for (int i = 0; i < annotations.size(); ++i) {
-                if (gt_matched_flag[i]) continue;
+            for (size_t j = 0; j < annotations.size(); ++j) {
+                if (gt_matched_flag[j]) continue;
 
-                // 从全局映射表获取类别ID
                 int gt_cls = -1;
-                auto it = label_map.find(annotations[i].label);
+                auto it = label_map.find(annotations[j].label);
                 if (it != label_map.end()) {
                     gt_cls = it->second;
                 }
 
-                // 类别相同 = 匹配
                 if (gt_cls == pred_cls) {
-                    best_gt_idx = i;
-                    break;
+                    if (is_segment) {
+                        float iou = CalculateMaskIoU(pred_obj.points, annotations[j].points, img_width, img_height);
+                        if (iou > best_err) {
+                            best_err = iou;
+                            best_gt_idx = static_cast<int>(j);
+                        }
+                    } else {
+                        best_gt_idx = static_cast<int>(j);
+                        break;
+                    }
                 }
             }
 
             if (best_gt_idx != -1) {
                 gt_matched_flag[best_gt_idx] = true;
                 matched_count++;
-                float err = CalculatePointError(pred_obj.points, annotations[best_gt_idx].points);
-                total_point_error += err;
 
-                std::cout << "  目标 ID = " << pred_cls
-                        << " 置信度 = " << pred_obj.confidence
-                        << " 误差 = " << err << " px ✅" << std::endl;
+                if (is_segment) {
+                    total_error += best_err;
+                    std::cout << "  目标 ID = " << pred_cls
+                              << " 置信度 = " << pred_obj.confidence
+                              << " mIoU = " << best_err << " ✅" << std::endl;
+                } else {
+                    float err = CalculatePointError(pred_obj.points, annotations[best_gt_idx].points);
+                    total_error += err;
+                    std::cout << "  目标 ID = " << pred_cls
+                            << " 置信度 = " << pred_obj.confidence
+                            << " 误差 = " << err << " px ✅" << std::endl;
+                }
             } else {
                 std::cout << "  目标 ID = " << pred_cls << " 未匹配到真值 ❌" << std::endl;
             }
         }
         
-        DrawResults(image, objects, task_name);
+        // 可视化
+        if (is_segment) {
+            for (const auto& obj : objects) {
+                cv::Scalar color = CLASS_COLORS[obj.label % CLASS_COLORS.size()];
+                if (obj.points.size() >= 3) {
+                    std::vector<std::vector<cv::Point>> contours = {ptsToInt(obj.points)};
+                    cv::drawContours(image, contours, -1, color, 2);
+                    cv::Mat overlay = image.clone();
+                    cv::fillPoly(overlay, contours, color);
+                    cv::addWeighted(overlay, 0.3, image, 0.7, 0, image);
+                }
+                cv::rectangle(image, obj.bbox, color, 1);
+                auto it = id_to_label.find(obj.label);
+                std::string label_name = (it != id_to_label.end()) ? it->second : std::to_string(obj.label);
+                std::string text = label_name + " " + std::to_string(obj.confidence).substr(0, 5);
+                cv::putText(image, text, cv::Point(obj.bbox.x, obj.bbox.y - 5),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.8, color, 2);
+            }
+        } else {
+            for (const auto& obj : objects) {
+                cv::Scalar box_color = CLASS_COLORS[obj.label % CLASS_COLORS.size()];
+                cv::rectangle(image, obj.bbox, box_color, 1);
+                for (size_t k = 0; k < obj.points.size(); k++) {
+                    cv::Scalar point_color = POINT_COLORS[k % POINT_COLORS.size()];
+                    cv::circle(image, obj.points[k], 5, point_color, -1);
+                    cv::putText(image, std::to_string(k+1), cv::Point(obj.points[k].x + 14, obj.points[k].y + 14),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.6, point_color, 2);
+                }
+                auto it = id_to_label.find(obj.label);
+                std::string label_name = (it != id_to_label.end()) ? it->second : std::to_string(obj.label);
+                std::string text = label_name + " " + std::to_string(obj.confidence).substr(0, 5);
+                cv::putText(image, text, cv::Point(obj.bbox.x, obj.bbox.y - 5),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.8, box_color, 2);
+            }
+        }
+        cv::putText(image, "Task: " + task_name, cv::Point(10, 30),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(255, 255, 255), 2);
+        
         std::string output_path = output_dir + "/" + task_name + "_result_" + std::to_string(i) + ".jpg";
         cv::imwrite(output_path, image);
         std::cout << "  保存可视化结果到: " << output_path << std::endl;
     }
     
-    // 整齐对齐输出
     std::cout << "\n========== " << task_name << " 误差统计结果 ==========" << std::endl;
     std::cout << std::fixed << std::setprecision(4);
 
-    std::cout  << "图像总数:            " << total_images << "\n";
-    std::cout  << "GT对象总数:          " << total_gt << "\n";
-    std::cout  << "检测对象总数:        " << total_detections << "\n";
-    std::cout  << "匹配对象总数:        " << matched_count << "\n";
-    std::cout  << "精度:                " << (total_detections>0 ? (float)matched_count/total_detections : 0) << "\n";
-    std::cout  << "召回率:              " << (total_gt>0 ? (float)matched_count/total_gt : 0) << "\n";
-    std::cout  << "关键点误差平均距离:  " << (matched_count>0 ? total_point_error/matched_count : 0) << " px\n";
+    std::cout << "图像总数:            " << total_images << "\n";
+    std::cout << "GT对象总数:          " << total_gt << "\n";
+    std::cout << "检测对象总数:        " << total_detections << "\n";
+    std::cout << "匹配对象总数:        " << matched_count << "\n";
+    std::cout << "精度:                " << (total_detections>0 ? (float)matched_count/total_detections : 0) << "\n";
+    std::cout << "召回率:              " << (total_gt>0 ? (float)matched_count/total_gt : 0) << "\n";
+    if (is_segment) {
+        std::cout << "平均掩码IoU:         " << (matched_count>0 ? total_error/matched_count : 0) << "\n";
+    } else {
+        std::cout << "关键点误差平均距离:  " << (matched_count>0 ? total_error/matched_count : 0) << " px\n";
+    }
 
     return true;
 }
@@ -244,7 +368,14 @@ bool TestTask(YoloTaskType task_type, const std::string& task_name,
 int main(int argc, char** argv) {
     // 数据和模型路径
     std::string data_root = "/root/perception/workspace/ebots_perception_core/vendor/CVAlgorithmRepo/src/data";
-    std::string output_dir = data_root + "/infer_test/results";
+    if (argc > 1) {
+        std::cout << "使用自定义数据路径: " << argv[1] << std::endl;
+        data_root = argv[1];
+    }
+    std::string output_dir = data_root + "/output";
+
+    std::cout << "数据路径: " << data_root << std::endl;
+    std::cout << "输出路径: " << output_dir << std::endl;
     
     // 创建输出目录
     std::filesystem::create_directories(output_dir);
@@ -256,13 +387,27 @@ int main(int argc, char** argv) {
         std::string model_name;
         std::string data_dir;
         std::vector<std::string> image_extensions;
+        std::map<std::string, int> label_map;
+        bool is_segment = false;
+    };
+    
+    // 各任务的标签 → 类别ID映射（按模型训练时的类别ID）
+    std::map<std::string, int> detect_label_map = {
+        {"coil", 0}, {"slot_1st", 1}, {"slot_2nd", 2}
+    };
+    std::map<std::string, int> segment_label_map = {
+        {"cable1", 0}, {"cable2", 1}, {"cable3", 2},
+        {"cable4", 3}, {"cable5", 4}, {"cable6", 5}
+    };
+    std::map<std::string, int> pose_label_map = {
+        {"1", 0}, {"2", 1}, {"3", 2}, {"4", 3}, {"5", 4}, {"6", 5}
     };
     
     std::vector<TaskConfig> tasks = {
-        {YoloTaskType::DETECT,  "detect", "detect_yolo_detector.engine", "detect", {".png", ".tiff"}},
-        {YoloTaskType::OBB,     "obb",    "obb_yolo_detector.engine",    "obb",    {".png", ".tiff"}},
-        {YoloTaskType::POSE,    "pose",   "pose_yolo_detector.engine",   "pose",   {".png", ".tiff"}}
-        // SEGMENT任务暂时跳过，因为没有对应的测试数据
+        {YoloTaskType::DETECT,  "detect",  "detect_yolo_detector.engine",  "detect",  {".png", ".tiff"}, detect_label_map},
+        {YoloTaskType::OBB,     "obb",     "obb_yolo_detector.engine",     "obb",     {".png", ".tiff"}, detect_label_map},
+        {YoloTaskType::POSE,    "pose",    "pose_yolo_detector.engine",    "pose",    {".png", ".tiff"}, pose_label_map},
+        {YoloTaskType::SEGMENT, "segment", "segment_yolo_detector.engine", "segment", {".png", ".tiff"}, segment_label_map, true}
     };
     
     // 测试每个任务
@@ -270,7 +415,7 @@ int main(int argc, char** argv) {
         std::string model_path = data_root + "/weights/" + task.model_name;
         std::string task_data_dir = data_root + "/infer_test/" + task.data_dir;
 
-        std::cout << "\n========== Testing " << task.task_name << " ==========" << std::endl;
+        std::cout << "\n====================== 测试任务 " << task.task_name << " ===================" << std::endl;
         std::cout << "  Model: " << model_path << std::endl;
         std::cout << "  Data: " << task_data_dir << std::endl;
         
@@ -296,10 +441,10 @@ int main(int argc, char** argv) {
             std::cerr << "No test data found for " << task.task_name << std::endl;
             continue;
         }
-        
-        TestTask(task.task_type, task.task_name, model_path, image_paths, json_paths, output_dir);
+
+        TestTask(task.task_type, task.task_name, model_path, image_paths, json_paths, output_dir, task.label_map, task.is_segment);
     }
     
-    std::cout << "\n========== All tests completed! ==========" << std::endl;
+    std::cout << "\n============== 完成全部测试任务 ===============" << std::endl;
     return 0;
 }

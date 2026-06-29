@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "BaseTRTGlobal.h"
 
@@ -23,8 +24,7 @@ struct Binding {
 	std::string name;
 	nvinfer1::DataType dtype;
 	nvinfer1::Dims dims;
-	void* buffer;
-	int size = 0;
+	size_t size = 0;
 };
 
 class BASETRTINFER_EXPORT BaseTRT {
@@ -50,12 +50,12 @@ class BASETRTINFER_EXPORT BaseTRT {
 	Logger logger_;
 
 	Binding input_binding_;
-	Binding output_binding_;
+	std::vector<Binding> output_bindings_;
 	int gpu_id_ = 0;
 
-	void* device_buffers_[2] = {nullptr, nullptr};
+	std::vector<void*> device_buffers_;
 	void* host_input_buffer_ = nullptr;
-	void* host_buffer_ = nullptr;
+	std::vector<void*> host_buffers_;
 };
 
 #endif 

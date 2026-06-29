@@ -232,13 +232,13 @@ KeypointObjectDescriptor HRNetInfer::Postprocess(const BboxTransform& bboxTransf
     // heatmaps_.clear();
     KeypointObjectDescriptor obj; 
 
-    const int batch = output_binding_.dims.d[0];
-    const int num_channels = output_binding_.dims.d[1];
-    const int heatmapH = output_binding_.dims.d[2];
-    const int heatmapW = output_binding_.dims.d[3];
+    const int batch = output_bindings_[0].dims.d[0];
+    const int num_channels = output_bindings_[0].dims.d[1];
+    const int heatmapH = output_bindings_[0].dims.d[2];
+    const int heatmapW = output_bindings_[0].dims.d[3];
     const int heatmapSize = heatmapH * heatmapW;
 
-    const float* output_ptr = static_cast<const float*>(host_buffer_);
+    const float* output_ptr = static_cast<const float*>(host_buffers_[0]);
     if (output_ptr == nullptr) {
         std::cerr << "HRNet output buffer is null" << std::endl;
         return obj;

@@ -166,13 +166,27 @@ bool YoloTRTInfer::Letterbox(const cv::Mat& image, cv::Mat& output,
 void YoloTRTInfer::Postprocess() {
     impl_->detected_objects.clear();
     
-    auto num_detections  = output_binding_.dims.d[1];  // 检测框数量，yolo默认300
-    auto num_channels = output_binding_.dims.d[2];     // 每个检测框的通道数，相当于矩阵列数
+    auto num_detections  = output_bindings_[0].dims.d[1];  // 检测框数量，yolo默认300
+    auto num_channels = output_bindings_[0].dims.d[2];     // 每个检测框的通道数，相当于矩阵列数
+
+    // === 分割任务：提前设置原型掩码信息 ===
+    if (impl_->task_type == YoloTaskType::SEGMENT && output_bindings_.size() >= 2) {
+        // 原型掩码 tensor shape: [1, num_proto, proto_h, proto_w] (NCHW)
+        g_segment_proto.proto_masks = static_cast<const float*>(host_buffers_[1]);
+        g_segment_proto.num_proto   = output_bindings_[1].dims.d[1];
+        g_segment_proto.proto_h     = output_bindings_[1].dims.d[2];
+        g_segment_proto.proto_w     = output_bindings_[1].dims.d[3];
+        g_segment_proto.net_width   = input_binding_.dims.d[3];
+        g_segment_proto.net_height  = input_binding_.dims.d[2];
+        std::cout << "[Segment] proto_masks loaded: " << g_segment_proto.num_proto
+                  << "x" << g_segment_proto.proto_h << "x" << g_segment_proto.proto_w
+                  << "  net_size: " << g_segment_proto.net_width << "x" << g_segment_proto.net_height << std::endl;
+    }
 
     // 调用后处理函数
     if (impl_->postprocess_func) {
         impl_->postprocess_func(
-            static_cast<float*>(host_buffer_),
+            static_cast<float*>(host_buffers_[0]),
             num_channels,
             num_detections,
             impl_->detected_objects);

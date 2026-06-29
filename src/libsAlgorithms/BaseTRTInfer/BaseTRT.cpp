@@ -54,17 +54,18 @@ BaseTRT::~BaseTRT() {
 	if (stream_ != nullptr) {
 		cudaStreamSynchronize(stream_);
 	}
-	if (device_buffers_[0] != nullptr) {
-		cudaFree(device_buffers_[0]);
-	}
-	if (device_buffers_[1] != nullptr) {
-		cudaFree(device_buffers_[1]);
+	for (auto* buf : device_buffers_) {
+		if (buf != nullptr) {
+			cudaFree(buf);
+		}
 	}
 	if (host_input_buffer_ != nullptr) {
 		cudaFreeHost(host_input_buffer_);
 	}
-	if (host_buffer_ != nullptr) {
-		cudaFreeHost(host_buffer_);
+	for (auto* buf : host_buffers_) {
+		if (buf != nullptr) {
+			cudaFreeHost(buf);
+		}
 	}
 	if (stream_ != nullptr) {
 		cudaStreamDestroy(stream_);
@@ -102,12 +103,15 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 	cudaStreamCreate(&stream_);
 
 	int num_bindings = engine_->getNbIOTensors();
-	if (num_bindings != 2) {
-		std::cerr << "Expected exactly 2 bindings (input and output), but got "
+	if (num_bindings < 2) {
+		std::cerr << "Expected at least 2 bindings (input and output), but got "
 							<< num_bindings << std::endl;
 		return false;
 	}
-	for (int i = 0; i < 2; i++) {// 0: input, 1: output 这个地方分开写更合适，因为input和output的维度是不同的
+	input_binding_ = Binding();
+	output_bindings_.clear();
+
+	for (int i = 0; i < num_bindings; i++) {
 		Binding binding;
 
 		const char* tensorName = engine_->getIOTensorName(i);
@@ -125,21 +129,20 @@ bool BaseTRT::LoadModel(const std::string& modelPath)
 
 		nvinfer1::TensorIOMode mode = engine_->getTensorIOMode(tensorName);
 
-		bool is_input = (mode == nvinfer1::TensorIOMode::kINPUT);
-		if (is_input) {
+		if (mode == nvinfer1::TensorIOMode::kINPUT) {
 			input_binding_ = binding;
 			context_->setInputShape(tensorName, dims);
 		} else {
-			output_binding_ = binding;
+			output_bindings_.push_back(binding);
 		}
 	}
 
-	if (input_binding_.size == 0 || output_binding_.size == 0) {
+	if (input_binding_.size == 0 || output_bindings_.empty()) {
 		std::cerr << "Failed to determine input/output bindings." << std::endl;
 		return false;
 	}
 
-	std::cout << "load model success!" << std::endl;
+	std::cout << "load model success! [" << output_bindings_.size() << " output(s)]" << std::endl;
 	MakePipe(true);
 
 	return true;
@@ -158,30 +161,48 @@ void BaseTRT::MakePipe(bool is_warmup) {
 
 	cudaError_t err;
 
-	err = cudaMallocAsync(&device_buffers_[0], input_binding_.size, stream_);
+	// 释放旧 buffer（如果有）
+	for (auto* buf : device_buffers_) { if (buf) cudaFree(buf); }
+	for (auto* buf : host_buffers_) { if (buf) cudaFreeHost(buf); }
+	device_buffers_.clear();
+	host_buffers_.clear();
+
+	// input dev & host
+	void* dev_buf = nullptr;
+	err = cudaMallocAsync(&dev_buf, input_binding_.size, stream_);
 	if (err != cudaSuccess) {
 		std::cerr << "Failed to allocate device memory for input tensor "
 							<< input_binding_.name << std::endl;
 		return;
 	}
+	device_buffers_.push_back(dev_buf);
 
-	err = cudaMallocAsync(&device_buffers_[1], output_binding_.size, stream_);
-	if (err != cudaSuccess) {
-		std::cerr << "Failed to allocate device memory for output tensor "
-							<< output_binding_.name << std::endl;
-		return;
-	}
 	err = cudaHostAlloc(&host_input_buffer_, input_binding_.size, 0);
 	if (err != cudaSuccess) {
 		std::cerr << "Failed to allocate host memory for input tensor "
 							<< input_binding_.name << std::endl;
 		return;
 	}
-	err = cudaHostAlloc(&host_buffer_, output_binding_.size, 0);
-	if (err != cudaSuccess) {
-		std::cerr << "Failed to allocate host memory for output tensor "
-							<< output_binding_.name << std::endl;
-		return;
+
+	// output dev & host (for each output)
+	for (size_t i = 0; i < output_bindings_.size(); i++) {
+		void* dev_out = nullptr;
+		err = cudaMallocAsync(&dev_out, output_bindings_[i].size, stream_);
+		if (err != cudaSuccess) {
+			std::cerr << "Failed to allocate device memory for output tensor "
+								<< output_bindings_[i].name << std::endl;
+			return;
+		}
+		device_buffers_.push_back(dev_out);
+
+		void* host_out = nullptr;
+		err = cudaHostAlloc(&host_out, output_bindings_[i].size, 0);
+		if (err != cudaSuccess) {
+			std::cerr << "Failed to allocate host memory for output tensor "
+								<< output_bindings_[i].name << std::endl;
+			return;
+		}
+		host_buffers_.push_back(host_out);
 	}
 
 	if (is_warmup) {
@@ -210,6 +231,7 @@ bool BaseTRT::Infer() {
 
 	cudaError_t err;
 
+	// input tensor address
 	bool ret = context_->setTensorAddress(input_binding_.name.c_str(),
 																				device_buffers_[0]);
 	if (!ret) {
@@ -217,12 +239,15 @@ bool BaseTRT::Infer() {
 							<< input_binding_.name << std::endl;
 		return false;
 	}
-	ret = context_->setTensorAddress(output_binding_.name.c_str(),
-																	 device_buffers_[1]);
-	if (!ret) {
-		std::cerr << "Failed to set tensor address for output tensor "
-							<< output_binding_.name << std::endl;
-		return false;
+	// output tensor addresses (device_buffers_[0] = input, device_buffers_[1..N] = outputs)
+	for (size_t i = 0; i < output_bindings_.size(); i++) {
+		ret = context_->setTensorAddress(output_bindings_[i].name.c_str(),
+																		 device_buffers_[1 + i]);
+		if (!ret) {
+			std::cerr << "Failed to set tensor address for output tensor "
+								<< output_bindings_[i].name << std::endl;
+			return false;
+		}
 	}
 
 	ret = context_->enqueueV3(stream_);
@@ -231,13 +256,16 @@ bool BaseTRT::Infer() {
 		return false;
 	}
 
-	err = cudaMemcpyAsync(host_buffer_, device_buffers_[1], output_binding_.size,
-												cudaMemcpyDeviceToHost, stream_);
-
-	if (err != cudaSuccess) {
-		std::cerr << "Failed to copy data from device for output tensor "
-							<< output_binding_.name << std::endl;
-		return false;
+	// D2H copy for all outputs
+	for (size_t i = 0; i < output_bindings_.size(); i++) {
+		err = cudaMemcpyAsync(host_buffers_[i], device_buffers_[1 + i],
+													output_bindings_[i].size,
+													cudaMemcpyDeviceToHost, stream_);
+		if (err != cudaSuccess) {
+			std::cerr << "Failed to copy data from device for output tensor "
+								<< output_bindings_[i].name << std::endl;
+			return false;
+		}
 	}
 
 	cudaStreamSynchronize(stream_);

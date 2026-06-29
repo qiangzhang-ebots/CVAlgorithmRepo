@@ -44,12 +44,12 @@ void FPCYoloTRTInfer::Postprocess() {
   fpc_zif_objs_.clear();
   
   // 获取输出维度
-  auto num_channels = output_binding_.dims.d[1];
-  auto num_anchors = output_binding_.dims.d[2];
+  auto num_channels = output_bindings_[0].dims.d[1];
+  auto num_anchors = output_bindings_[0].dims.d[2];
 
   // 创建输出矩阵
   cv::Mat output = cv::Mat(num_channels, num_anchors, CV_32F,
-                           static_cast<float*>(host_buffer_));
+                           static_cast<float*>(host_buffers_[0]));
 
   // 遍历所有锚点，进行后处理
   for (int i = 0; i < num_anchors; ++i) {

@@ -31,3 +31,16 @@ void SegmentPostprocess(
     int num_channels,
     int num_anchors,
     std::vector<YoloObject>& detected_objects);
+
+// 分割后处理需要的原型掩码信息
+// 在调用 SegmentPostprocess 前由调用方设置
+struct SegmentProtoInfo {
+    const float* proto_masks = nullptr;  // [num_proto, proto_h, proto_w] NCHW
+    int num_proto = 0;
+    int proto_h = 0;
+    int proto_w = 0;
+    // 模型输入尺寸（letterbox后的尺寸）
+    int net_width = 0;
+    int net_height = 0;
+};
+extern SegmentProtoInfo g_segment_proto;

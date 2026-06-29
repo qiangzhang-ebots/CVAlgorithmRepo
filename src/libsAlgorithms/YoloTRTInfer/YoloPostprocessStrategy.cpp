@@ -1,4 +1,9 @@
 #include "YoloPostprocessStrategy.h"
+#include <cmath>
+#include <opencv2/imgproc.hpp>
+
+// 原型掩码信息（在调用前由 YoloTRTInfer::Postprocess 设置）
+SegmentProtoInfo g_segment_proto;
 
 // 通用 NMS 函数。暂时没有调用
 static void nms(std::vector<YoloObject>& objects, float iou_threshold = 0.45f) {
@@ -216,14 +221,42 @@ void PosePostprocess(
     //nms(detected_objects);
 }
 
-// 分割后处理 - 返回轮廓点集，待验证
+// 分割后处理 - 使用掩码系数 × 原型掩码 解码分割轮廓
 void SegmentPostprocess(
     const float* output_buffer,
     int num_channels,
     int num_detections,
     std::vector<YoloObject>& detected_objects) {
     detected_objects.clear();
-    const int MASK_POINT_COUNT = 32; // 32个值 = 16个(x,y)点
+
+    const int NUM_MASK = 32;  // YOLOv8-seg 固定 32 个掩码系数
+    int expected_channels = 6 + NUM_MASK;  // xyxy + conf + cls + 32 coeffs
+
+    // 验证通道数
+    if (num_channels < expected_channels) {
+        printf("[SegmentPostprocess] Invalid num_channels=%d, expected >= %d\n",
+               num_channels, expected_channels);
+        return;
+    }
+
+    // 验证原型掩码信息
+    if (!g_segment_proto.proto_masks || g_segment_proto.num_proto != NUM_MASK) {
+        printf("[SegmentPostprocess] Missing or invalid prototype masks (num_proto=%d, expected %d)\n",
+               g_segment_proto.num_proto, NUM_MASK);
+        return;
+    }
+
+    int proto_h = g_segment_proto.proto_h;
+    int proto_w = g_segment_proto.proto_w;
+    int proto_area = proto_h * proto_w;
+
+    // 网络输入尺寸（letterbox后）
+    float net_w = static_cast<float>(g_segment_proto.net_width);
+    float net_h = static_cast<float>(g_segment_proto.net_height);
+
+    // 原型掩码 → 网络输入图的缩放比例
+    float scale_x = net_w / proto_w;
+    float scale_y = net_h / proto_h;
 
     for (int i = 0; i < num_detections; ++i) {
         const float* data = output_buffer + i * num_channels;
@@ -237,32 +270,81 @@ void SegmentPostprocess(
 
         if (conf < 0.5f) continue;
 
+        // 读取 32 个掩码系数
+        const float* coeffs = data + 6;
+
+        // === 计算原始掩码 ===
+        // raw_mask[ph, pw] = Σ coeff[c] * proto[c, ph, pw]
+        // 使用 cv::Mat 加速计算
+        cv::Mat raw_mask(proto_h, proto_w, CV_32FC1, cv::Scalar(0.0f));
+        for (int c = 0; c < NUM_MASK; ++c) {
+            if (std::abs(coeffs[c]) < 1e-6f) continue;
+            const float* proto_c = g_segment_proto.proto_masks + c * proto_area;
+            for (int ph = 0; ph < proto_h; ++ph) {
+                float* row = raw_mask.ptr<float>(ph);
+                for (int pw = 0; pw < proto_w; ++pw) {
+                    row[pw] += coeffs[c] * proto_c[ph * proto_w + pw];
+                }
+            }
+        }
+
+        // sigmoid
+        cv::Mat mask;
+        cv::exp(-raw_mask, mask);
+        mask = 1.0f / (1.0f + mask);
+
+        // === 在原型空间裁剪 bbox 区域 ===
+        float px1 = x1 / scale_x;
+        float py1 = y1 / scale_y;
+        float px2 = x2 / scale_x;
+        float py2 = y2 / scale_y;
+
+        // 裁切边界
+        int ix1 = std::max(0, static_cast<int>(std::floor(px1)));
+        int iy1 = std::max(0, static_cast<int>(std::floor(py1)));
+        int ix2 = std::min(proto_w, static_cast<int>(std::ceil(px2)));
+        int iy2 = std::min(proto_h, static_cast<int>(std::ceil(py2)));
+
+        // 裁剪 + 缩放到 bbox 大小
+        cv::Mat cropped = mask(cv::Range(iy1, iy2), cv::Range(ix1, ix2));
+        int box_w = static_cast<int>(x2 - x1 + 0.5f);
+        int box_h = static_cast<int>(y2 - y1 + 0.5f);
+        if (box_w < 1) box_w = 1;
+        if (box_h < 1) box_h = 1;
+
+        cv::Mat resized;
+        cv::resize(cropped, resized, cv::Size(box_w, box_h));
+
+        // 二值化
+        cv::Mat binary;
+        cv::threshold(resized, binary, 0.5f, 255, cv::THRESH_BINARY);
+        binary.convertTo(binary, CV_8UC1);
+
+        // 查找轮廓
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        if (contours.empty()) continue;
+
+        // 取最大轮廓
+        auto largest = std::max_element(contours.begin(), contours.end(),
+            [](const std::vector<cv::Point>& a, const std::vector<cv::Point>& b) {
+                return cv::contourArea(a) < cv::contourArea(b);
+            });
+
+        // 轮廓点在 resized 空间，resized = (box_w, box_h) 对应网络输入图 bbox
         YoloObject obj;
         obj.label = label;
         obj.confidence = conf;
         obj.bbox = cv::Rect2f(cv::Point2f(x1, y1), cv::Point2f(x2, y2));
 
-        // 掩码转换
-        const float* mask_data = data + 6; // 相对 bbox的轮廓点，每个点占2个值（x,y），相对bbox 0-1归一化
-        float box_w = obj.bbox.width;
-        float box_h = obj.bbox.height;
-        float box_x = obj.bbox.x;
-        float box_y = obj.bbox.y;
-
-        // 32个数值 → 16个 (x,y) 轮廓点
-        for (int j = 0; j < MASK_POINT_COUNT; j += 2) {
-            float nx = mask_data[j];
-            float ny = mask_data[j+1];
-
-            // 直接转成 推理图上的绝对像素坐标
-            float x = box_x + nx * box_w;
-            float y = box_y + ny * box_h;
-
-            obj.points.emplace_back(x, y);
+        for (const auto& pt : *largest) {
+            obj.points.emplace_back(x1 + pt.x, y1 + pt.y);
         }
 
         detected_objects.push_back(obj);
     }
-    // NMS
+
+    // 应用 NMS
     //nms(detected_objects);
 }
