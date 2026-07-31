@@ -46,6 +46,10 @@ YoloTRTInfer::YoloTRTInfer(YoloTaskType task_type)
 YoloTRTInfer::~YoloTRTInfer() = default;
 
 std::vector<YoloObject> YoloTRTInfer::Predict(const cv::Mat& input_image) {
+  if (!SetCudaDevice("YoloTRTInfer::Predict")) {
+    return impl_->detected_objects;
+  }
+
   impl_->detected_objects.clear();
   
   try {
@@ -66,7 +70,7 @@ std::vector<YoloObject> YoloTRTInfer::Predict(const cv::Mat& input_image) {
     }
     Postprocess();
   } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
+    std::cerr << CV_ALGORITHM_LOG_PREFIX << e.what() << '\n';
     return impl_->detected_objects;
   }
 
@@ -113,8 +117,9 @@ bool YoloTRTInfer::Preprocess(const cv::Mat& input_image) {
   err = cudaMemcpyAsync(device_buffers_[0], host_input_buffer_,
                         input_binding_.size, cudaMemcpyHostToDevice, stream_);
   if (err != cudaSuccess) {
-    std::cerr << "Failed to copy data to device for input tensor "
-              << input_binding_.name << std::endl;
+    std::cerr << CV_ALGORITHM_LOG_PREFIX << "Failed to copy data to device for input tensor "
+              << input_binding_.name << ": " << cudaGetErrorString(err)
+              << std::endl;
     return false;
   }
   return true;
@@ -241,5 +246,5 @@ void YoloTRTInfer::CreateStrategy(YoloTaskType task_type) {
           impl_->postprocess_func = DetectPostprocess;
   }
   const char* task_type_str[] = {"detect", "obb", "pose", "segment"};
-  std::cout << "[YoloTRTInfer] Create strategy for task type: " << task_type_str[static_cast<int>(task_type)] << std::endl;
+  std::cout << CV_ALGORITHM_LOG_PREFIX << "[YoloTRTInfer] Create strategy for task type: " << task_type_str[static_cast<int>(task_type)] << std::endl;
 }

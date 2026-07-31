@@ -5,9 +5,9 @@
 
 int main() {
   std::string engine_path =
-      "/root/perception/workspace/model_data/best.engine";
+      "/root/perception/workspace/model_data/FPCYolo_20260727.engine";
   std::string val_dir =
-      "/root/perception/workspace/ebots_perception_ros2/test_data/image_detector/a.png";
+      "/root/perception/workspace/model_data/20260730_050635_277/view_a.png";
 
   // std::string engine_path =
   //     "/home/ebots/Desktop/zhq/FPCDetection/runs/pose/train_240/weights/best.engine";

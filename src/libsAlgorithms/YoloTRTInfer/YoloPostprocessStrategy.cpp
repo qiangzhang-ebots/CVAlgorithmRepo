@@ -67,7 +67,7 @@ void DetectPostprocess(
         float y2 = data[3];
         int label = static_cast<int>(round(data[5]));
 
-        std::cout << "label " << label << " conf " << conf <<  "points [" << x1 << "," << y1 << "] [" << x2 << "," << y2 << "]\n";
+        std::cout << CV_ALGORITHM_LOG_PREFIX << "label " << label << " conf " << conf <<  "points [" << x1 << "," << y1 << "] [" << x2 << "," << y2 << "]\n";
         
         YoloObject obj;
         obj.label = label;

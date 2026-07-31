@@ -36,3 +36,5 @@ dist/
 *.swo
 *.tmp
 *~
+
+.cache/

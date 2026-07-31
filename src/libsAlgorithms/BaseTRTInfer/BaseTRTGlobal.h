@@ -1,5 +1,4 @@
 
-
 #ifndef BASETRTGLOBAL_H
 #define BASETRTGLOBAL_H
 
@@ -13,5 +12,7 @@
 #else
 #define BASETRTINFER_EXPORT
 #endif
+
+#define CV_ALGORITHM_LOG_PREFIX "[CVAlgorithm] "
 
 #endif

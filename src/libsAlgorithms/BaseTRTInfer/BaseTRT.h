@@ -15,7 +15,7 @@
 class Logger : public nvinfer1::ILogger {
 	void log(Severity severity, const char* msg) noexcept override {
 		if (severity != Severity::kINFO) {
-			std::cout << "TensorRT: " << msg << std::endl;
+			std::cout << CV_ALGORITHM_LOG_PREFIX << "TensorRT: " << msg << std::endl;
 		}
 	}
 };
@@ -39,6 +39,7 @@ class BASETRTINFER_EXPORT BaseTRT {
 	*/
 	bool SetGPUId(int gpu_id); 
  protected:
+	bool SetCudaDevice(const char* stage);
 	void MakePipe(bool is_warmup = false);
 	bool Infer();
 

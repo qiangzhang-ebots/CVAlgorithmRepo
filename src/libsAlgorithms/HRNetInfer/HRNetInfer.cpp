@@ -191,7 +191,11 @@ cv::Point2f HRNetInfer::DecodeKeypointsDarkUDP(const cv::Mat& heatmap, const cv:
 
 KeypointObjectDescriptor HRNetInfer::Predict(const cv::Mat& inputImage, const cv::Rect& box)
 {
-  KeypointObjectDescriptor obj; 
+  if (!SetCudaDevice("HRNetInfer::Predict")) {
+    return KeypointObjectDescriptor{};
+  }
+
+  KeypointObjectDescriptor obj;
   try {
     cv::Mat image;
     if (inputImage.channels() == 1) {
@@ -219,7 +223,7 @@ KeypointObjectDescriptor HRNetInfer::Predict(const cv::Mat& inputImage, const cv
     }
     return Postprocess(bboxTransform);
   } catch (const std::exception& e) {
-    std::cerr << e.what() << '\n';
+    std::cerr << CV_ALGORITHM_LOG_PREFIX << e.what() << '\n';
     return obj;
   }
 
@@ -240,7 +244,7 @@ KeypointObjectDescriptor HRNetInfer::Postprocess(const BboxTransform& bboxTransf
 
     const float* output_ptr = static_cast<const float*>(host_buffers_[0]);
     if (output_ptr == nullptr) {
-        std::cerr << "HRNet output buffer is null" << std::endl;
+        std::cerr << CV_ALGORITHM_LOG_PREFIX << "HRNet output buffer is null" << std::endl;
         return obj;
     }
 
@@ -309,8 +313,9 @@ bool HRNetInfer::Preprocess(const cv::Mat& input_image, const BboxTransform& bbo
   err = cudaMemcpyAsync(device_buffers_[0], host_input_buffer_,
                         input_binding_.size, cudaMemcpyHostToDevice, stream_);
   if (err != cudaSuccess) {
-    std::cerr << "Failed to copy data to device for input tensor "
-              << input_binding_.name << std::endl;
+    std::cerr << CV_ALGORITHM_LOG_PREFIX << "Failed to copy data to device for input tensor "
+              << input_binding_.name << ": " << cudaGetErrorString(err)
+              << std::endl;
     return false;
   }
   return true;
